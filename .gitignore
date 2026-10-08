@@ -1,8 +1,8 @@
 __pycache__/
 *.pyc
 fortran/build/
-Template/
-templates/
+/Template/
+/templates/
 out*.dat
 output.dat
 CLAUDE.md
