@@ -1,5 +1,5 @@
-# Quick smoke test (tests/test_smoke.py): two masses on the standard M_aa grid (300-400 GeV in
-# 0.1 GeV steps, as assumed by TMDP.py) with very few VEGAS calls.
+# Quick smoke test (tests/fit/test_smoke.py): two masses on the standard M_aa grid (300-400 GeV in
+# 0.1 GeV steps, as assumed by fit/TMDP.py) with very few VEGAS calls.
 # The output is statistically noisy and only good for testing the chain.
 outdir: Template/test
 rs: 13000.

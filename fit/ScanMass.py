@@ -1,5 +1,5 @@
 """
-> python3 -i ScanMass.py yaml/fit/input_LHC13T.yml Nloop
+> python3 -i fit/ScanMass.py fit/config/input_LHC13T.yml Nloop
 """
 import sys
 import time

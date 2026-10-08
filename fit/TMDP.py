@@ -257,7 +257,7 @@ if __name__ == '__main__':
     start_time = time.time()
 
     ## initialize TMDP class with an input yml file ##
-    LHC = TMDP('yaml/fit/input_LHC13T.yml')
+    LHC = TMDP('fit/config/input_LHC13T.yml')
 
     #LHC.hBG.Draw()
     #LHC.hSig.Draw()

@@ -1,55 +1,53 @@
-# Linux/Docker build of the gg2aa programs (arXiv:1607.00990) and libQCD.
-# Run inside the pytmdp Docker image:  make -C fortran [target]
-# The original macOS makefiles are kept as */Makefile.legacy.
+# Build of the gg -> gamma gamma threshold code (arXiv:1607.00990).
+# Run inside the tmdp Docker image:  make -C fortran [target]
+#
+#   lib/      physics library: amplitudes (amp), Green functions (green),
+#             running alpha_s (qcd), shared include files, BASES stubs
+#   extern/   third-party code (THIRD_PARTY.md), shipped unchanged
+#   src/      current drivers (mktemplate)
+#   legacy/   the 2016 drivers, kept unchanged; built by `make legacy`
 
 FC       = gfortran
 FFLAGS  ?= -O2 -w -std=legacy -ffixed-line-length-132
 BUILD    = build
-INCS     = -IQCD -Igg2aa -I$(BUILD)/inc
+INCS     = -Ilib/qcd -Ilib/include -Iextern -I$(BUILD)/inc
 
 CHAPLIN_DIR ?= /opt/chaplin
 LHAPDF_LIBS  = $(shell lhapdf-config --ldflags) -lstdc++
-LIBS         = $(BUILD)/libQCD.a -L$(CHAPLIN_DIR)/lib -lchaplin $(LHAPDF_LIBS)
+LIBS         = $(BUILD)/libtmdp.a -L$(CHAPLIN_DIR)/lib -lchaplin $(LHAPDF_LIBS)
 
-QCD_OBJS   = $(addprefix $(BUILD)/,QCDlibs.o asrgkt_pegasus.o betafct_pegasus.o)
-GG2AA_OBJS = $(addprefix $(BUILD)/,gg2aaQ.o gg2aaT.o gg2aaG.o gg2aaA.o \
-               GrnMSBLO.o GrnMSBNLO.o intvegas.o bases_stub.o)
+LIB_SRCS = $(wildcard lib/amp/*.f lib/green/*.f lib/qcd/*.f) lib/bases_stub.f \
+           extern/intvegas.f $(wildcard extern/pegasus/*.f)
+LIB_OBJS = $(addprefix $(BUILD)/,$(notdir $(LIB_SRCS:.f=.o)))
 
+PROGRAMS = mktemplate
 # Sig_tot.f integrates with BASES itself and is not built (BASES is not
-# shipped; fortran/stubs only provides no-op set-up/histogram routines).
-PROGRAMS = mktemplate MKD_gg2aa Sig_gg2aa Sig_qqb2aa Amp_gg2aa Argand_gg2aa \
-           DGrnMS PlotGrnMS
-EXES     = $(addprefix $(BUILD)/,$(addsuffix .exe,$(PROGRAMS)))
+# shipped; lib/bases_stub.f only provides no-op set-up/histogram routines).
+LEGACY   = MKD_gg2aa Sig_gg2aa Sig_qqb2aa Amp_gg2aa Argand_gg2aa DGrnMS PlotGrnMS
 
-.PHONY: all clean
+vpath %.f src legacy lib lib/amp lib/green lib/qcd extern extern/pegasus
+
+.PHONY: all legacy clean
 .SECONDARY:
-all: $(EXES)
+all: $(addprefix $(BUILD)/,$(addsuffix .exe,$(PROGRAMS)))
+legacy: $(addprefix $(BUILD)/,$(addsuffix .exe,$(LEGACY)))
 
-# gg2aaT.f / gg2aaA.f include 'CHAPLIN.INC' but the file is shipped as
-# chaplin.inc; provide the upper-case name on case-sensitive file systems.
-$(BUILD)/inc/CHAPLIN.INC: gg2aa/chaplin.inc
+# lib/amp/gg2aaT.f and gg2aaA.f include 'CHAPLIN.INC' but the file is
+# shipped as extern/chaplin.inc; provide the upper-case name on
+# case-sensitive file systems.
+$(BUILD)/inc/CHAPLIN.INC: extern/chaplin.inc
 	@mkdir -p $(BUILD)/inc
 	cp $< $@
 
-$(BUILD)/libQCD.a: $(QCD_OBJS)
+$(BUILD)/%.o: %.f | $(BUILD)/inc/CHAPLIN.INC
+	$(FC) $(FFLAGS) $(INCS) -c $< -o $@
+
+$(BUILD)/libtmdp.a: $(LIB_OBJS)
 	ar cr $@ $^
 	ranlib $@
 
-$(BUILD)/%.o: QCD/%.f | $(BUILD)/inc/CHAPLIN.INC
-	$(FC) $(FFLAGS) $(INCS) -c $< -o $@
-
-$(BUILD)/%.o: gg2aa/%.f | $(BUILD)/inc/CHAPLIN.INC
-	$(FC) $(FFLAGS) $(INCS) -c $< -o $@
-
-$(BUILD)/%.o: src/%.f | $(BUILD)/inc/CHAPLIN.INC
-	$(FC) $(FFLAGS) $(INCS) -c $< -o $@
-
-$(BUILD)/%.o: stubs/%.f
-	@mkdir -p $(BUILD)
-	$(FC) $(FFLAGS) -c $< -o $@
-
-$(BUILD)/%.exe: $(BUILD)/%.o $(GG2AA_OBJS) $(BUILD)/libQCD.a
-	$(FC) $(FFLAGS) $< $(GG2AA_OBJS) $(LIBS) -o $@
+$(BUILD)/%.exe: $(BUILD)/%.o $(BUILD)/libtmdp.a
+	$(FC) $(FFLAGS) $< $(LIBS) -o $@
 
 clean:
 	rm -rf $(BUILD)

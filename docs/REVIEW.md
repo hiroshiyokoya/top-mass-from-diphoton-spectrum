@@ -1,7 +1,9 @@
 # コードレビューと修正提案（2026-10）
 
-対象：2018 年版の Python（`TMDP.py`, `Scan*.py`）と、テンプレートを作る Fortran（`fortran/gg2aa`, 2016 年、arXiv:1607.00990）。
+対象：フィット部分（2018 年版の Python。`fit/TMDP.py`, `fit/Scan*.py`）と、信号を計算する Fortran（2016 年、arXiv:1607.00990。`fortran/lib/`, `fortran/legacy/`）。
 **このドキュメントは提案である。** 修正は承認されたものから別イシュー・別 PR で行う（イシュー #5）。
+
+> リポジトリは 2026-10 に `pyTMDP` から `top-mass-from-diphoton-spectrum` に改名し、Fortran を主、フィットを従とする構成に再編した（イシュー #12）。Docker イメージ名は `tmdp`。本文中のパスは再編後のもの。2018 年当時の版を指すときは「2018 年版」と書く。
 
 環境：`docker/Dockerfile`（ROOT 6.34.00 / Python 3.12 / gfortran 13 / LHAPDF 6.5.5 / CHAPLIN 1.2）。
 各項目の確度：**verified**＝コンテナで実行して確かめた／**read**＝コードを読んで確認したが実行していない／**inference**＝推論。
@@ -13,14 +15,14 @@
 - ROOT 6.34 では、ビニングが異なり `N` がおよそ `10 × nbins` を超えると **エラーも警告も出さずに 1 事象も詰めない**（最小例：200→100 ビン、N=1000 は詰まり、N=1999 以上は 0）。結果、空ヒストに対してフィットが走り、χ² は数値として返る。
 - 2018 年当時の ROOT では動いていたと推定（inference）。どの版で変わったかは未確認。
 - **提案**：ROOT の `FillRandom` に頼らず、テンプレートと背景をフィット用ビンに積分した期待値 $\mu_i$ を作り、`numpy.random.Generator.poisson(μ_i)` でビンごとに生成する（P4 も同時に解決）。
-- 再現テスト：`tests/test_smoke.py::test_pseudo_data_not_empty`（strict xfail。修正で pass に変わる）。
+- 再現テスト：`tests/fit/test_smoke.py::test_pseudo_data_not_empty`（strict xfail。修正で pass に変わる）。
 
-### P2. 最良質量がテンプレート格子に量子化される（`ScanMass.py`, `TMDP.py __main__`）— read
+### P2. 最良質量がテンプレート格子に量子化される（`fit/ScanMass.py`, `fit/TMDP.py` の `__main__`）— read
 - 各疑似実験の最良値が「χ² 最小のテンプレート質量」なので、結果は格子間隔（0.5–1 GeV）の離散値になり、`np.std(list_best)` は格子より細かい精度を表せない。
 - **提案**：χ²(m_t) の最小点近傍 3–5 点に放物線を当てて連続的な最小値と Δχ²=1 幅を出す。疑似実験ごとの統計誤差も同時に得られる。
 
 ### P3. Fortran の積分関数がカット外で戻り値を設定しない — verified
-- `MKD_gg2aa.f` ほか 7 本（`DSig_gg2aa`, `DSig_gg2aa0`, `DSig_terms`, `MKD_gg2aa`, `Scl_gg2aa`, `Sig_gg2aa`, `Sig_qqb2aa`）の `INT2`/`INT1` は、`IF (cut) RETURN` で **関数値を代入せずに戻る**（未定義値）。
+- `fortran/legacy/` の積分関数 7 本（`DSig_gg2aa`, `DSig_gg2aa0`, `DSig_terms`, `MKD_gg2aa`, `Scl_gg2aa`, `Sig_gg2aa`, `Sig_qqb2aa`）の `INT2`/`INT1` は、`IF (cut) RETURN` で **関数値を代入せずに戻る**（未定義値）。
 - 同じソースから `INT2 = 0D0` の 1 行だけを除いたものを、最適化レベルだけ変えて実行した結果（$\sqrt s$=100 TeV, CT14lo, $m_t$=171.6, $\Gamma_t$=1.5, $m_{\gamma\gamma}$=300 GeV, 同じ乱数列）：
 
   | ビルド | $d\sigma/dm_{\gamma\gamma}$ [fb/GeV] |
@@ -28,14 +30,14 @@
   | `-O0`（初期化なし） | 11.9744 |
   | `-O2`（初期化なし） | 5.80641 |
   | `-O2`（`INT2 = 0D0` あり＝`fortran/src/mktemplate.f`） | 5.80641 |
-  | 同梱 `MKD_gg2aa.f` を `-O2` でビルド | 11.9744 |
+  | 同梱 `fortran/legacy/MKD_gg2aa.f` を `-O2` でビルド | 11.9744 |
 
   **結果がコンパイラの最適化次第で約 2.06 倍変わる。** カットで捨てるべき点に直前の値が返り、実質的にカット（特に $p_T>0.4\,m_{\gamma\gamma}$）が効いていない状態になる。
   裏づけ：同じ条件で $p_T>0.4\,m_{\gamma\gamma}$ カットだけを外す（`ptratio: 0`）と 11.8767 になり、`-O0` の 11.9744 に近い（差 0.8%）。
 - 未定義動作の中身は「捨てた点で直前に受理した積分値を返す」こと。`mktemplate.f` の `LEGACYCUT=1` でこれを明示的に再現すると、上の `-O0` の結果、および無変更の `MKD_gg2aa.exe` と全桁一致する（verified）。
-- **1607.00990 の図は影響を受けていない**（verified）。論文の図から取り出した曲線（`reference/1607.00990/`）は、正しいカット処理（`LEGACYCUT=0`）で 0.5% 以内に再現される。FCC（$p_T>0.4\,m_{\gamma\gamma}$）では、旧挙動だと 2.05 倍ずれる。詳しくは `yaml/repro/1607.00990.yml` と `scripts/reproduce_1607_00990.py`。
-- 2018 年のテンプレート（pyTMDP の `Template/`）がどちらで作られたかは、ファイルが無いので確認できない。
-- **提案**：全積分関数の先頭で `INT2 = 0D0`。新規の `fortran/src/mktemplate.f` は対応済み（既定 `LEGACYCUT=0`）。
+- **1607.00990 の図は影響を受けていない**（verified）。論文の図から取り出した曲線（`reference/1607.00990/`）は、正しいカット処理（`LEGACYCUT=0`）で 0.5% 以内に再現される。FCC（$p_T>0.4\,m_{\gamma\gamma}$）では、旧挙動だと 2.05 倍ずれる。詳しくは `config/repro/1607.00990.yml`、`scripts/reproduce_1607_00990.py`、`docs/repro-1607.00990/`。
+- 2018 年版のテンプレート（当時の `Template/`）がどちらで作られたかは、ファイルが無いので確認できない。
+- **提案**：`fortran/legacy/` は無変更で保管する方針なので、直すのは現行ドライバ側だけでよい。`fortran/src/mktemplate.f` は対応済み（既定 `LEGACYCUT=0`）。旧ドライバを今後も動かすなら、各積分関数の先頭に `INT2 = 0D0` を足した版を `src/` に移す。
 
 ## 優先度：中
 
@@ -56,34 +58,33 @@
 - `hGen.Fit(...)` の戻り値（`TFitResultPtr`／status）を確認せずに χ² を比較している。失敗したフィットも最良候補になりうる。
 - **提案**：`S` オプションで結果を受け、`IsValid()` でなければ除外・記録する。
 
-### P8. `GG2AAG` の Green 関数キャッシュのキーがエネルギーだけ（`fortran/gg2aa/gg2aaG.f`）— read
+### P8. `GG2AAG` の Green 関数キャッシュのキーがエネルギーだけ（`fortran/lib/amp/gg2aaG.f`）— read
 - `E = RS - 2MT` が前回と同じなら、`MT`・`GT`・`MU`・`J` が変わっても前回の `GRN` を返す。現在の使い方（1 本の積分中は全部固定）では問題にならないが、幅を変えて同じ $m_{\gamma\gamma}$ を続けて呼ぶ使い方では古い値を返す。
 - **提案**：キャッシュのキーを (E, MT, GT, MU, J) にする。
 
-### P9. `GRNNLOMSB` の数値的な不備（`fortran/gg2aa/GrnMSBNLO.f`）— read
+### P9. `GRNNLOMSB` の数値的な不備（`fortran/lib/green/GrnMSBNLO.f`）— read
 - 収束判定の比較値 `BP` が 1 回目のループで未初期化。
 - 収束しないと `NLOOP` と `X1`（DATA 文／COMMON）を増やしてやり直すが、増えた値が以後の呼び出しにも残る（呼び出し順で結果と計算時間が変わりうる）。
 - `PI=3.14159254D0`（正しくは …265）。相対 $3\times10^{-8}$ で実害はない。
 - **提案**：`BP` を初期化し、`NLOOP`・`X1` は局所変数にコピーしてから増やす。Green 関数単体の検証（$\alpha_s\to0$ で $G_0$ に一致、LO ポテンシャルで 1S 極が $E=-m_t(C_F\alpha_s)^2/4$）をテストにする。
 
 ### P10. VEGAS の乱数が点ごとに続きから使われる — read／inference
-- `intvegas.f` の `RANF` は種が固定（234612947）で、プロセス内では状態が続く。旧 `MKD_gg2aa.f` は 1 プロセスで 8 質量を回すので、質量ごとに別の乱数列になる。
+- `fortran/extern/intvegas.f` の `RANF` は種が固定（234612947）で、プロセス内では状態が続く。旧 `fortran/legacy/MKD_gg2aa.f` は 1 プロセスで 8 質量を回すので、質量ごとに別の乱数列になる。
 - 新しい `scripts/make_templates.py` は 1 質量 1 プロセスなので、全テンプレートが同じ乱数列を使う（質量間の差では統計揺らぎが相関して打ち消し合う方向。inference）。
 - 2 次元の滑らかな積分なので、**決定論的な求積（Gauss–Legendre）に替えればテンプレートのジッターが消える**。提案。
 
 ## 優先度：低
 
-- **P11.** `MKD_gg2aa.f` の主プログラムが `INT2` を `DOUBLE COMPLEX` と宣言しているが、関数は `DOUBLE PRECISION`（read。主プログラムからは直接呼ばないので実害なし。`-std=legacy` でコンパイル可）。
+- **P11.** `fortran/legacy/MKD_gg2aa.f` の主プログラムが `INT2` を `DOUBLE COMPLEX` と宣言しているが、関数は `DOUBLE PRECISION`（read。主プログラムからは直接呼ばないので実害なし。`-std=legacy` でコンパイル可）。
 - **P12.** 単位換算 `389429.57D6`（GeV⁻² → fb）。$(\hbar c)^2 = 0.3893794$ GeV² mb なら `389379.4D6` で、相対 $+1.3\times10^{-4}$（inference。出典を確認）。
 - **P13.** ROOT オブジェクト名の重複（`'dir'`, `'sig'`, 空名の `TF1`）。複数の `TMDP` を作ると上書き・警告になる（read）。
 - **P14.** `set_init(self, param, dict)` が組み込みの `dict` を隠す。yml の `Nloop` は読まれていない。docstring のファイル名（`Scan_mass.py` など）が実ファイルと違う。`i % (Nloop/10)` が float 演算。`plt.show()` はヘッドレス環境で無意味（read）。
 - **P15.** `calc_simpson_integral` は点数が奇数・等間隔を前提にし、偶数だと最後の区間を黙って落とす（read）。
-- **P16.** `Sig_tot.f` は BASES で積分しており、BASES を同梱していないのでビルドしていない。
-- **P17.** ハード係数の $\mathcal{O}(\alpha_s)$ 定数 `AT10` は 0 固定（"not known yet"）。Green 関数の $\alpha_s$ スケールは 40 GeV 固定、PDF は CT14lo（物理の仕様。変えるなら別途議論）。
+- **P16.** `fortran/legacy/Sig_tot.f` は BASES で積分しており、BASES を同梱していないのでビルドしていない。
+- **P17.** ハード係数の $\mathcal{O}(\alpha_s)$ 定数 `AT10` は 0 固定（"not known yet"）。Green 関数の $\alpha_s$ スケールは 40 GeV 固定、PDF は 2018 年版の設定（`config/templates/LHC13T.yml` など）では CT14lo、論文の設定（`paper1607_*`）では CT14nlo（物理の仕様。変えるなら別途議論）。
 - **P18.** 依存が PyROOT に集中している。P1・P5 の修正後は numpy + iminuit（または scipy）だけでフィットまで書け、ROOT なしで動かせる（大きめの変更。任意）。
-
-- **P19.** $\alpha_s$ を走らせる次数は libQCD の `NQCD`（`MKD_gg2aa.f` は 0 = LO、`Sig_gg2aa.f` は 1 = NLO）で、ドライバごとに違う。PDF は CT14nlo でも、1607.00990 の図は LO の走り（`NQCD=0`、$\alpha_s(M_Z)=0.1185$）で計算されている。NLO の走りにすると、全 $m_{\gamma\gamma}$ で 1.4% 小さくなる（verified）。PDF と $\alpha_s$ の次数をそろえるなら、物理の仕様として別途議論する。
+- **P19.** $\alpha_s$ を走らせる次数は libQCD の `NQCD`（`fortran/legacy/MKD_gg2aa.f` は 0 = LO、`Sig_gg2aa.f` は 1 = NLO）で、ドライバごとに違う。PDF は CT14nlo でも、1607.00990 の図は LO の走り（`NQCD=0`、$\alpha_s(M_Z)=0.1185$）で計算されている。NLO の走りにすると、全 $m_{\gamma\gamma}$ で 1.4% 小さくなる（verified）。PDF と $\alpha_s$ の次数をそろえるなら、物理の仕様として別途議論する。
 
 ## 範囲外（文書化のみ）
 
-- 背景イベント（`Direct.dat`, `OneF.dat`, `TwoF.dat`）は gg2aa では作れず、リポにも無い。形式は「$m_{\gamma\gamma}$ の値を空白区切りで並べたテキスト」（`read_events_from_file`）。出所（DIPHOX など）は未確認。
+- 背景イベント（`Direct.dat`, `OneF.dat`, `TwoF.dat`）は Fortran では作れず、リポにも無い。形式は「$m_{\gamma\gamma}$ の値を空白区切りで並べたテキスト」（`fit/TMDP.py` の `read_events_from_file`）。出所（DIPHOX など）は未確認。

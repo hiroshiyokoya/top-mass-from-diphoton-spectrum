@@ -10,7 +10,7 @@ compares them with the curves extracted from the paper's figures
   <outdir>/<figure>.png           our curves (lines) over the paper's (dots)
   <outdir>/summary.md, summary.json
 
-    python3 scripts/reproduce_1607_00990.py yaml/repro/1607.00990.yml -j 20
+    python3 scripts/reproduce_1607_00990.py config/repro/1607.00990.yml -j 20
 
 Exit status 0 if every curve agrees with the paper within `tolerance`.
 Existing chunk results are reused unless --force is given.

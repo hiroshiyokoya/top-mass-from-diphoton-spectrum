@@ -1,7 +1,7 @@
 """Spot checks of the signal of arXiv:1607.00990 (a few seconds per point).
 
 Each point is computed with the full VEGAS statistics of the paper setup
-(yaml/repro/1607.00990.yml) and compared with the curve extracted from the
+(config/repro/1607.00990.yml) and compared with the curve extracted from the
 paper's figure.  The full comparison of all curves is
 scripts/reproduce_1607_00990.py.
 """
@@ -13,11 +13,12 @@ import numpy as np
 import pytest
 import yaml
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT_DIR, 'scripts'))
 import reproduce_1607_00990 as repro  # noqa: E402
 
-CFG = yaml.safe_load(open(os.path.join(ROOT_DIR, 'yaml', 'repro',
+CFG = yaml.safe_load(open(os.path.join(ROOT_DIR, 'config', 'repro',
                                        '1607.00990.yml')))
 TOL = 0.005
 

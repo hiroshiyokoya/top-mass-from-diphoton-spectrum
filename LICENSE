@@ -23,5 +23,5 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 This licence covers the original code of this repository. The third-party code
 listed in THIRD_PARTY.md (HPLOG, DDILOG, QCD-PEGASUS, the VEGAS variant and the
-CHAPLIN interface header in fortran/) is not covered and remains under the
-terms of its respective authors.
+CHAPLIN interface header in fortran/extern/) is not covered and remains under
+the terms of its respective authors.
