@@ -22,6 +22,11 @@ C               This reproduces what the 2016 programs did through an
 C               unset function result (docs/REVIEW.md P3) and is needed
 C               to reproduce the numbers of arXiv:1607.00990.     (0)
 C       MAAMIN, MAAMAX, DMAA  M_aa grid [GeV]          (300, 400, 0.1)
+C       NSKIP   number of M_aa points of the full grid before MAAMIN
+C               when a template is computed in chunks: the random
+C               numbers that a single run would have used for them
+C               (about NSKIP*NCALL*ITMX*2) are skipped, so that the
+C               chunks do not repeat each other's random sequence.  (0)
 C       NCALL, ITMX  VEGAS calls / iterations          (50000, 6)
 C       OUTFILE output file                            (Tab_<MT>_<GT>.dat)
 C     Output: one line per M_aa,  "M_aa  dsigma/dM_aa[fb/GeV]  error",
@@ -47,10 +52,13 @@ C     in the format read by TMDP.read_template_from_file.
       COMMON /CUTS/    PTRATIO,MODE,LEGACYCUT
       INTEGER IORDG
       COMMON /GRNORD/  IORDG
-      INTEGER NQCDIN
+      INTEGER NQCDIN,NSKIP
+      INTEGER*8 K,NRAN
+      DOUBLE PRECISION RANF,RDUMMY
+      EXTERNAL RANF
       NAMELIST /TMPL/ RS,PDFSET,MT,GT,MUG,ETMAX,PTMIN,PTRATIO,
      -     MODE,IORDG,NQCDIN,LEGACYCUT,
-     -     MAAMIN,MAAMAX,DMAA,NCALL,ITMX,OUTFILE
+     -     MAAMIN,MAAMAX,DMAA,NSKIP,NCALL,ITMX,OUTFILE
       INCLUDE 'parameter.inc'
       INCLUDE 'qcdparam.inc'
       INCLUDE 'qcdfunc.inc'
@@ -70,6 +78,7 @@ C.....Defaults (as in MKD_gg2aa.f)
       MAAMIN = 300D0
       MAAMAX = 400D0
       DMAA   = 0.1D0
+      NSKIP  = 0
       NCALL  = 50000
       ITMX   = 6
       OUTFILE = ' '
@@ -83,6 +92,14 @@ C.....
       MU  = MUG
       ASG = ASQCD(MU)
       CALL INITPDFSETBYNAME (PDFSET)
+C.....Skip the random numbers of the preceding points (VEGAS draws NDIM=2
+C     numbers per call, at most NCALL calls per iteration; with early
+C     termination it may use fewer, so this only approximately matches a
+C     single run, which is enough to make the chunks independent).
+      NRAN = INT(NSKIP,8) * INT(NCALL,8) * INT(ITMX,8) * 2_8
+      DO K = 1, NRAN
+         RDUMMY = RANF(0D0)
+      ENDDO
 C.....
       WRITE (6,'(A,F9.1,A,A,A,F7.2,A,F5.2)') ' # RS=',RS,' PDF=',
      -     TRIM(PDFSET),' MT=',MT,' GT=',GT
