@@ -5,14 +5,20 @@ in Sec. 5 of [arXiv:1607.00990](https://arxiv.org/abs/1607.00990). This is the 2
 previously the whole repository `pyTMDP`. It needs signal templates from the Fortran part (see the
 [main README](../README.md)) and background samples, which are inputs.
 
-> **Known problems (not yet fixed; see [docs/REVIEW.md](../docs/REVIEW.md)).**
+> **Status (2026-10).** P1 (empty pseudo-data with current ROOT), P4 and P6 (template names parsed
+> from the full path) of [docs/REVIEW.md](../docs/REVIEW.md) are fixed. The pseudo-data are now
+> Poisson numbers around the expected counts per bin; set `seed` in the fit input to make a run
+> reproducible.
 >
-> - **P1** With current ROOT (6.34), `TH1::FillRandom` silently produces *empty* pseudo-data in
->   `TMDP.genEvents`. The fits then run on empty histograms.
->   `tests/fit/test_smoke.py::test_pseudo_data_not_empty` is a strict xfail until this is fixed.
+> Still open:
+>
 > - **P2** The best-fit mass is the template with the smallest $\chi^2$, so it is quantised to the
 >   template grid.
-> - **P6** Template names are parsed from the full path, so `dir` must not contain `_`.
+> - **P5** The fit function takes the template value at the bin centre instead of the bin
+>   integral.
+> - **P20** The background shape in the pseudo-data is the histogram of the background sample
+>   itself, so the sample must be much larger than one pseudo-dataset. For example, 20 million
+>   events give $\chi^2/{\rm ndf}\simeq1$, but 0.2 million give about 2.5.
 
 ## How it works
 
@@ -21,8 +27,9 @@ previously the whole repository `pyTMDP`. It needs signal templates from the For
    `scripts/make_templates.py`.
 2. **Backgrounds.** Event lists of $m_{\gamma\gamma}$ for direct, one-fragmentation and
    two-fragmentation photon pairs (`Direct.dat`, `OneF.dat`, `TwoF.dat`).
-3. **Pseudo-experiments** (`TMDP.py`). Events are generated from the background and from the
-   signal template at the true mass, and binned in `hbin` bins over 300–400 GeV.
+3. **Pseudo-experiments** (`TMDP.py`). The background and the signal template at the true mass
+   are integrated over `hbin` bins of 300–400 GeV, scaled to the expected numbers of events, and the
+   observed number in each bin is drawn from a Poisson distribution.
    - Each pseudo-dataset is fitted in `[fmin, fmax]` with
      $(1-k_{gg})\,f_{\rm ATLAS}(m;a)+k_{gg}\,f_{\rm template}(m;m_t)$, where
      $f_{\rm ATLAS}\propto(1-(m/\sqrt s)^{1/3})^a$, once for every template.
@@ -67,6 +74,7 @@ Keys, as read by `TMDP.set_init`:
 | `files_dir`, `files_one`, `files_two` | background event files |
 | `files_sig` | template used to generate the pseudo-data (true mass) |
 | `files_template` | templates fitted to each pseudo-dataset |
+| `seed` | optional seed of the pseudo-data random numbers |
 
 The units of `sig_*` are inferred from the `Nevnt` formula and have not been checked against the
 original setup.

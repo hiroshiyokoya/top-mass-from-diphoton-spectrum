@@ -3,6 +3,8 @@ Python module for "Top-quark Mass from DiPhoton mass spectrum"
 
 Hiroshi Yokoya <hyokoya@gmail.com>
 """
+import os
+import re
 import sys
 import time
 import yaml
@@ -27,11 +29,27 @@ def calc_simpson_integral(data):
                for i in ilist]
     return sum(S_part)
 
+TEMPLATE_NAME = re.compile(r'^Tab_(\d+(?:\.\d+)?)_(\d+(?:\.\d+)?)\.dat$')
+
 def get_mass_width_from_filename(fname):
-    separate = fname.split('_')
-    mass = float(separate[1])
-    width = float(separate[2][0:-4])
-    return mass, width
+    # Parse the file name only: the directory may contain '_'
+    # (docs/REVIEW.md P6).
+    match = TEMPLATE_NAME.match(os.path.basename(fname))
+    if match is None:
+        raise ValueError('not a template file name (Tab_<mt>_<Gt>.dat): '
+                         + fname)
+    return float(match.group(1)), float(match.group(2))
+
+def bin_fractions(hist, edges):
+    """Fraction of the content of the ROOT histogram `hist` in each bin
+    [edges[i], edges[i+1]], with the content spread uniformly inside each
+    bin of `hist`.  Works for any binning of `hist`."""
+    n = hist.GetNbinsX()
+    hist_edges = np.array([hist.GetBinLowEdge(i) for i in range(1, n + 2)])
+    content = np.array([hist.GetBinContent(i) for i in range(1, n + 1)])
+    cumulative = np.concatenate([[0.], np.cumsum(content)])
+    frac = np.diff(np.interp(edges, hist_edges, cumulative))
+    return frac / frac.sum()
 
 def read_template_from_file(fname):
     with open(fname,'r') as fopen:
@@ -96,6 +114,10 @@ class TMDP(object):
         self.files_two = self.set_init('files_two',init)
         self.files_sig = self.set_init('files_sig',init)
         self.files_temp = self.set_init('files_template',init)
+
+        # Random numbers for the pseudo-data; optional 'seed' in the yml
+        # makes a run reproducible.
+        self.rng = np.random.default_rng(init.get('seed'))
 
         self.read_background()
         self.read_signal()
@@ -162,6 +184,19 @@ class TMDP(object):
         print('read signal data')
 
     def genEvents(self):
+        """Fill hGenBG, hGenSig and hGen with one pseudo-dataset.
+
+        The expected numbers of events per bin, mu_i, are the background
+        (hBG) and signal (hSig) shapes integrated over the hbin bins of
+        [hmin, hmax] and scaled to Nbg and Nsig; the observed numbers are
+        Poisson(mu_i).  This replaces TH1::FillRandom, which with ROOT 6.34
+        fills nothing when the binnings differ (docs/REVIEW.md P1), and lets
+        the total number of events fluctuate (P4).
+        """
+        if not hasattr(self, 'mu_bg'):
+            edges = np.linspace(self.hmin, self.hmax, self.hbin + 1)
+            self.mu_bg = self.Nbg * bin_fractions(self.hBG, edges)
+            self.mu_sig = self.Nsig * bin_fractions(self.hSig, edges)
         try:
             self.hGenBG.Reset()
         except AttributeError:
@@ -176,8 +211,13 @@ class TMDP(object):
                                      self.hbin,self.hmin,self.hmax)
             self.hGenSig.SetLineColor(38)
             self.hGenSig.SetFillColor(38)
-        self.hGenBG.FillRandom(self.hBG ,int(self.Nbg) )
-        self.hGenSig.FillRandom(self.hSig,int(self.Nsig))
+        for hist, mu in ((self.hGenBG, self.mu_bg),
+                         (self.hGenSig, self.mu_sig)):
+            counts = self.rng.poisson(mu)
+            for i, n in enumerate(counts, 1):
+                hist.SetBinContent(i, n)
+                hist.SetBinError(i, np.sqrt(n))
+            hist.SetEntries(counts.sum())
         self.hGen = self.hGenSig + self.hGenBG
         self.hGen.SetTitle('Gen')
         self.hGen.SetName('Gen')
