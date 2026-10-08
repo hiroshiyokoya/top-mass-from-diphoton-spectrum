@@ -5,15 +5,14 @@ in Sec. 5 of [arXiv:1607.00990](https://arxiv.org/abs/1607.00990). This is the 2
 previously the whole repository `pyTMDP`. It needs signal templates from the Fortran part (see the
 [main README](../README.md)) and background samples, which are inputs.
 
-> **Status (2026-10).** P1 (empty pseudo-data with current ROOT), P4 and P6 (template names parsed
-> from the full path) of [docs/REVIEW.md](../docs/REVIEW.md) are fixed. The pseudo-data are now
+> **Status (2026-10).** P1 (empty pseudo-data with current ROOT), P2 (best fit quantised to the
+> template grid), P4 and P6 (template names parsed from the full path) of
+> [docs/REVIEW.md](../docs/REVIEW.md) are fixed. The pseudo-data are now
 > Poisson numbers around the expected counts per bin; set `seed` in the fit input to make a run
 > reproducible.
 >
 > Still open:
 >
-> - **P2** The best-fit mass is the template with the smallest $\chi^2$, so it is quantised to the
->   template grid.
 > - **P5** The fit function takes the template value at the bin centre instead of the bin
 >   integral.
 > - **P20** The background shape in the pseudo-data is the histogram of the background sample
@@ -31,11 +30,18 @@ previously the whole repository `pyTMDP`. It needs signal templates from the For
    are integrated over `hbin` bins of 300–400 GeV, scaled to the expected numbers of events, and the
    observed number in each bin is drawn from a Poisson distribution.
    - Each pseudo-dataset is fitted in `[fmin, fmax]` with
-     $(1-k_{gg})\,f_{\rm ATLAS}(m;a)+k_{gg}\,f_{\rm template}(m;m_t)$, where
+     $(1-k_{gg})f_{\rm ATLAS}(m;a)+k_{gg}f_{\rm template}(m;m_t)$, where
      $f_{\rm ATLAS}\propto(1-(m/\sqrt s)^{1/3})^a$, once for every template.
-   - The template with the smallest $\chi^2$ gives the best-fit $m_t$.
-   - `ScanMass.py` repeats this `Nloop` times and reports the mean and spread. `ScanWidth.py` and
-     `Scan2D.py` do the same for $\Gamma_t$ and for $(m_t,\Gamma_t)$.
+   - The best fit is the vertex of a parabola fitted to $\chi^2$ near its minimum on the template
+     grid, and its error is the $\Delta\chi^2=1$ half-width (`TMDP.parabola_minimum`).
+     - Only the $\chi^2$ values are fitted; templates are never interpolated or extrapolated.
+     - If the smallest $\chi^2$ is at the first or last template, the result is marked `edge`
+       and the grid point is kept.
+   - `ScanMass.py` and `ScanWidth.py` repeat this `Nloop` times. They write
+     `grid_best best sigma status` per pseudo-experiment (`outMass.dat`, `outWidth.dat`) and print the
+     mean and spread of the parabola results, the mean error, and the grid-minimum result for
+     comparison.
+   - `Scan2D.py` writes the $\chi^2$ of every $(m_t,\Gamma_t)$ template for one pseudo-dataset.
 
 ## Running
 
