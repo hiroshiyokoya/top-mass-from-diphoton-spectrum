@@ -1,5 +1,5 @@
 """
-> python3 -i ScanWidth.py yaml/fit/inputWidth_LHC13T.yml Nloop
+> python3 -i fit/ScanWidth.py fit/config/inputWidth_LHC13T.yml Nloop
 """
 import sys
 import time

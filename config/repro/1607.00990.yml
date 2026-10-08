@@ -1,7 +1,7 @@
 # Reproduction of the gg -> gamma gamma signal of arXiv:1607.00990
 # (S. Kawabata and H. Yokoya, Eur. Phys. J. C 77 (2017) 323).
 #
-#   python3 scripts/reproduce_1607_00990.py yaml/repro/1607.00990.yml
+#   python3 scripts/reproduce_1607_00990.py config/repro/1607.00990.yml
 #
 # Setup as stated in the paper (Sec. 4 and the figure legends): CT14NLO,
 # mu_R = mu_F = m_aa, |eta| < 2.5, pT > 40 GeV (LHC) or pT > 0.4 m_aa

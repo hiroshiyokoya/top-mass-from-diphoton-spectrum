@@ -2,17 +2,18 @@
 """Generate gg -> gamma gamma M_aa templates Tab_<mt>_<gt>.dat.
 
 Runs fortran/build/mktemplate.exe once per (m_t, Gamma_t) point, in
-parallel, and writes the files read by TMDP.GG2AA.  Intended to run
-inside the pytmdp Docker image:
+parallel, and writes one file per point (the format read by fit/TMDP.py).
+Intended to run inside the tmdp Docker image:
 
-    python3 scripts/make_templates.py yaml/templates/LHC13T.yml
+    python3 scripts/make_templates.py config/templates/LHC13T.yml
 
 The points to compute are the union of
-  * every template named in the fit inputs listed under `fit_inputs`
-    (files_sig and files_template of yaml/fit/*.yml), and
-  * the grid `masses` x `widths`, if given.
-`--check` only verifies that the template config and its fit inputs agree
-(output directory, sqrt(s)) and lists the points, without running anything.
+  * the grid `masses` x `widths`,
+  * every grid in `grids` (a list of {masses, widths}), and
+  * the explicit pairs in `points` ([[m_t, Gamma_t], ...]).
+`--check` only lists the points, without running anything.  Whether the
+fit inputs find all their templates is checked on the fit side
+(tests/fit/test_config.py).
 
 A manifest.json with the full configuration is written next to the
 templates so that each template set records how it was made.
@@ -93,38 +94,19 @@ def load_yaml(path):
         return yaml.safe_load(f)
 
 
-def fit_input_points(fit_cfg):
-    names = list(fit_cfg.get('files_sig') or []) + \
-        list(fit_cfg.get('files_template') or [])
-    return [parse_template_name(n) for n in names]
-
-
 def collect_points(cfg):
     """Sorted, de-duplicated (mt, gt) points requested by a template config."""
     points = set()
-    for fit in cfg.get('fit_inputs') or []:
-        points.update(fit_input_points(load_yaml(fit)))
+    grids = list(cfg.get('grids') or [])
     if 'masses' in cfg or 'widths' in cfg:
-        points.update((mt, gt) for gt in expand_grid(cfg['widths'])
-                      for mt in expand_grid(cfg['masses']))
+        grids.append({'masses': cfg['masses'], 'widths': cfg['widths']})
+    for g in grids:
+        points.update((mt, gt) for gt in expand_grid(g['widths'])
+                      for mt in expand_grid(g['masses']))
+    points.update((float(mt), float(gt)) for mt, gt in cfg.get('points') or [])
     # one file per name: equal names mean the same template
     by_name = {template_name(mt, gt): (mt, gt) for mt, gt in points}
     return sorted(by_name.values(), key=lambda p: (p[1], p[0]))
-
-
-def check_config(cfg):
-    """Problems (list of str) between a template config and its fit inputs."""
-    problems = []
-    outdir = norm_dir(cfg['outdir'])
-    for fit in cfg.get('fit_inputs') or []:
-        fcfg = load_yaml(fit)
-        if norm_dir(fcfg['dir']) != outdir:
-            problems.append('{}: dir {} != outdir {}'.format(
-                fit, fcfg['dir'], cfg['outdir']))
-        if float(fcfg['rs']) != float(cfg.get('rs', PARAMS['RS'][1])):
-            problems.append('{}: rs {} != {}'.format(
-                fit, fcfg['rs'], cfg.get('rs')))
-    return problems
 
 
 def namelist(cfg, mt, gt, outfile):
@@ -167,22 +149,19 @@ def run_one(exe, cfg, mt, gt, outdir):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('config', help='template config (yaml/templates/)')
+    parser.add_argument('config', help='template config (config/templates/)')
     parser.add_argument('-j', '--jobs', type=int, default=os.cpu_count(),
                         help='parallel runs (default: all CPUs)')
     parser.add_argument('--exe', default=DEFAULT_EXE)
     parser.add_argument('--force', action='store_true',
                         help='recompute templates that already exist')
     parser.add_argument('--check', action='store_true',
-                        help='only check the config and list the points')
+                        help='only list the points')
     args = parser.parse_args()
 
     cfg = load_yaml(args.config)
-    problems = check_config(cfg)
     points = collect_points(cfg)
     outdir = repo_path(cfg['outdir'])
-    if problems:
-        sys.exit('inconsistent config:\n  ' + '\n  '.join(problems))
     if args.check:
         for mt, gt in points:
             print(template_name(mt, gt))

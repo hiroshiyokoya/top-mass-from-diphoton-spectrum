@@ -1,4 +1,4 @@
-# pyTMDP toolchain: ROOT (PyROOT) + gfortran + LHAPDF6 + CHAPLIN + PDF sets.
+# tmdp toolchain (top-mass-from-diphoton-spectrum): ROOT (PyROOT) + gfortran + LHAPDF6 + CHAPLIN + PDF sets.
 # The repository itself is mounted at /work at run time (see README).
 FROM rootproject/root:6.34.00-ubuntu24.04
 

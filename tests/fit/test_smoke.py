@@ -1,10 +1,10 @@
 """End-to-end smoke test: Fortran template generator -> TMDP fit.
 
-Uses the low-statistics templates of yaml/templates/test.yml (generated
+Uses the low-statistics templates of config/templates/test.yml (generated
 on first use, ~1 min) and *synthetic* exponential backgrounds.  It checks
 that the chain runs, not that the physics is right.
 
-    python3 -m pytest -q tests        # inside the pytmdp Docker image
+    python3 -m pytest -q tests        # inside the tmdp Docker image
 """
 import os
 import pathlib
@@ -14,7 +14,8 @@ import sys
 import numpy as np
 import pytest
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 TEST_TEMPLATES = os.path.join(ROOT_DIR, 'Template', 'test')
 MASSES = ['172.0', '173.0']
 
@@ -26,7 +27,7 @@ def templates():
                for n in names):
         subprocess.run([sys.executable,
                         os.path.join(ROOT_DIR, 'scripts', 'make_templates.py'),
-                        os.path.join(ROOT_DIR, 'yaml', 'templates', 'test.yml')],
+                        os.path.join(ROOT_DIR, 'config', 'templates', 'test.yml')],
                        check=True)
     return names
 
@@ -60,7 +61,7 @@ def make_tmdp(templates):
         'files_one: [OneF.dat]', 'files_two: [TwoF.dat]',
         'files_sig: [{}]'.format(templates[1]),
         'files_template: [{}]'.format(', '.join(templates))]) + '\n')
-    sys.path.insert(0, ROOT_DIR)
+    sys.path.insert(0, os.path.join(ROOT_DIR, 'fit'))
     import TMDP
     tmdp = TMDP.TMDP(str(yml))
     tmdp.read_template()

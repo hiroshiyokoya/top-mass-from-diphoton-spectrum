@@ -1,5 +1,5 @@
 """
-> python3 -i Scan2D.py yaml/fit/input2D_FCC100.yml
+> python3 -i fit/Scan2D.py fit/config/input2D_FCC100.yml
 """
 import sys
 import time
