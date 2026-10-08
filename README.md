@@ -1,10 +1,7 @@
-# pyTMDP
+# top-mass-from-diphoton-spectrum
 
-**T**op-quark **M**ass from the **D**i**P**hoton mass spectrum.
-
-Pseudo-experiment study of how well the top-quark mass $m_t$ (and width $\Gamma_t$) can be
-determined from the shape of the diphoton invariant-mass spectrum $m_{\gamma\gamma}$ near the
-top-pair threshold $m_{\gamma\gamma}\simeq 2m_t$ at hadron colliders.
+Calculation of the $gg\to\gamma\gamma$ diphoton mass spectrum near the top-pair threshold,
+$m_{\gamma\gamma}\simeq 2m_t$, at hadron colliders, and its use to determine the top-quark mass.
 
 In $gg\to\gamma\gamma$ the top quark enters only through the one-loop box. Its absorptive part opens
 at $m_{\gamma\gamma}=2m_t$ and produces a dip–bump structure in $d\sigma/dm_{\gamma\gamma}$. Near
@@ -13,175 +10,129 @@ $\mathcal{M}^{\rm 1loop}+\mathcal{B}\,[G(E+i\Gamma_t)-G_0(E)]$, which resums the
 effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
 
 - S. Kawabata and H. Yokoya, *Top-quark mass from the diphoton mass spectrum*,
-  [arXiv:1607.00990](https://arxiv.org/abs/1607.00990), Eur. Phys. J. C 77 (2017) 323. This is the
-  LO + Green-function calculation that `fortran/gg2aa` implements.
+  [arXiv:1607.00990](https://arxiv.org/abs/1607.00990), Eur. Phys. J. C 77 (2017) 323. This
+  repository implements that calculation.
 - L. Chen, G. Heinrich, S. Jahn, S. P. Jones, M. Kerner, J. Schlenk and H. Yokoya,
   *Photon pair production in gluon fusion: Top quark effects at NLO with threshold matching*,
   [arXiv:1911.09314](https://arxiv.org/abs/1911.09314), JHEP 04 (2020) 115. This is the NLO
   follow-up and is not implemented here.
 
+The repository has two parts:
+
+- **Signal calculation (main), in Fortran.** It computes $d\sigma/dm_{\gamma\gamma}$ with the
+  Green-function matching, produces mass templates, and reproduces the figures of
+  arXiv:1607.00990.
+- **Mass fit (sub), in Python** (`fit/`). Pseudo-experiments that fit templates plus a smooth
+  background to the diphoton spectrum. This part comes from the 2018 code, previously the
+  repository `pyTMDP`. See [fit/README.md](fit/README.md).
+
 > **Status (2026-10).**
 >
-> - The **signal of arXiv:1607.00990 is reproduced**: all curves of its Figs. 1 and 4 agree with
->   this repository to within 1% (see [Reproducing arXiv:1607.00990](#reproducing-arxiv160700990)).
-> - The 2018 Python code runs with Python 3.12 / ROOT 6.34 in the Docker image, but has known
->   problems that are documented and not yet fixed (see [docs/REVIEW.md](docs/REVIEW.md)). The most
->   important one is **P1**: with current ROOT, `TH1::FillRandom` silently produces *empty*
->   pseudo-data in `TMDP.genEvents`, so fits run on empty histograms.
-> - The legacy Fortran integrands return an undefined value outside the cuts (**P3**). Depending
->   on the compiler optimisation, $d\sigma/dm_{\gamma\gamma}$ changes by a factor of about 2.
->   `fortran/src/mktemplate.f` is fixed, and the paper's figures are not affected.
-
-## How it works
-
-1. **Templates (signal).** For each $(m_t,\Gamma_t)$, `fortran/build/mktemplate.exe` computes
-   $d\sigma(pp\to gg\to\gamma\gamma)/dm_{\gamma\gamma}$ [fb/GeV] for 300–400 GeV in 0.1 GeV steps.
-   It includes the light-quark and top loops and the Green-function matching, and writes
-   `Tab_<mt>_<Gt>.dat`.
-2. **Backgrounds.** These are $m_{\gamma\gamma}$ event lists for direct, one-fragmentation and
-   two-fragmentation photon pairs (`Direct.dat`, `OneF.dat`, `TwoF.dat`). They are **not** in this
-   repository; see [Background data](#background-data).
-3. **Pseudo-experiments** (`TMDP.py`). Events are generated from the background and from the
-   signal template at the true mass, and binned in `hbin` bins over 300–400 GeV.
-   - Each pseudo-dataset is fitted in `[fmin, fmax]` with
-     $(1-k_{gg})\,f_{\rm ATLAS}(m;a)+k_{gg}\,f_{\rm template}(m;m_t)$, where
-     $f_{\rm ATLAS}\propto(1-(m/\sqrt s)^{1/3})^a$, once for every template.
-   - The template with the smallest $\chi^2$ gives the best-fit $m_t$.
-   - `ScanMass.py` repeats this `Nloop` times and reports the mean and spread.
+> - The **signal of arXiv:1607.00990 is reproduced**: all 19 curves of its Figs. 1 and 4 agree
+>   with this repository to within 0.31% (see
+>   [Reproducing arXiv:1607.00990](#reproducing-arxiv160700990)).
+> - The fit part has known problems that are documented and not yet fixed
+>   ([docs/REVIEW.md](docs/REVIEW.md)). Most importantly, with current ROOT the pseudo-data are
+>   silently empty (P1).
 
 ## Repository layout
 
 | Path | Content |
 |---|---|
-| `TMDP.py` | Classes `TMDP` (inputs, pseudo-data, fit functions) and `GG2AA` (one template) |
-| `ScanMass.py`, `ScanWidth.py`, `Scan2D.py` | Scans in $m_t$, in $\Gamma_t$, and in $(m_t,\Gamma_t)$ |
-| `yaml/fit/` | Fit inputs (2018): LHC 13 TeV, HE-LHC 27 TeV and FCC 100 TeV; mass, width and 2D scans |
-| `yaml/templates/` | Template-set configs: one per 2018 template directory, the paper's setup (`paper1607_*`), and a quick test set |
-| `yaml/repro/1607.00990.yml` | Setup and curves for reproducing the paper's figures |
-| `reference/1607.00990/` | Curves extracted from the paper's vector figures (CSV) |
-| `fortran/gg2aa/` | 2016 Fortran of arXiv:1607.00990 (amplitudes, Green functions, drivers). Unchanged except that the order of the Green-function potential in `gg2aaG.f` can be set (default NLO, as before) |
-| `fortran/QCD/` | libQCD: running $\alpha_s$ (QCD-PEGASUS), unchanged |
-| `fortran/src/mktemplate.f` | Template generator, one $(m_t,\Gamma_t)$ per run, parameters via namelist |
-| `fortran/stubs/` | No-op BASES routines (BASES is not needed for the VEGAS-based programs) |
-| `fortran/Makefile` | Linux build (the original macOS makefiles are kept as `*/Makefile.legacy`) |
-| `scripts/make_templates.py` | Runs `mktemplate.exe` over a $(m_t,\Gamma_t)$ grid in parallel |
-| `scripts/reproduce_1607_00990.py` | Computes all curves of Figs. 1 and 4 of the paper and compares them with `reference/` |
-| `scripts/tools/digitize_1607_00990.py` | Extracts the curves from the figure PDFs of the arXiv source |
-| `docker/Dockerfile` | Toolchain image: ROOT 6.34, gfortran, LHAPDF 6.5.5 + CT14 sets, CHAPLIN 1.2 |
-| `tests/` | End-to-end smoke test (Fortran → templates → fit), yaml consistency, spot checks against the paper |
-| `docs/REVIEW.md` | Code review (2026-10) and proposed fixes |
-| `THIRD_PARTY.md` | Third-party Fortran shipped in `fortran/` |
+| `fortran/lib/amp/` | $gg\to\gamma\gamma$ helicity amplitudes: light-quark loop, top loop, threshold part $\mathcal{A}+\mathcal{B}G$ |
+| `fortran/lib/green/` | $t\bar t$ Green function: Schrödinger equation with the LO/NLO QCD potential (`GrnMSBNLO.f`), analytic forms (`GrnMSBLO.f`) |
+| `fortran/lib/qcd/` | libQCD: running $\alpha_s$ and quark masses |
+| `fortran/lib/include/`, `fortran/lib/bases_stub.f` | shared include file; no-op BASES routines |
+| `fortran/extern/` | third-party code (VEGAS, QCD-PEGASUS, HPLOG, DDILOG, CHAPLIN header); see [THIRD_PARTY.md](THIRD_PARTY.md) |
+| `fortran/src/mktemplate.f` | current driver: $d\sigma/dm_{\gamma\gamma}$ for one $(m_t,\Gamma_t)$, parameters via namelist |
+| `fortran/legacy/` | the 2016 drivers of arXiv:1607.00990 (`MKD_gg2aa.f`, `Sig_gg2aa.f`, …), kept unchanged |
+| `fortran/Makefile` | `make -C fortran` builds `mktemplate`; `make -C fortran legacy` builds the 2016 drivers |
+| `scripts/make_templates.py` | runs `mktemplate` over a $(m_t,\Gamma_t)$ grid in parallel |
+| `scripts/reproduce_1607_00990.py` | computes all curves of Figs. 1 and 4 of the paper and compares them with `reference/` |
+| `scripts/tools/digitize_1607_00990.py` | extracts the curves from the figure PDFs of the arXiv source |
+| `config/templates/` | template sets: the paper's setup (`paper1607_*`), the 2018 sets used by `fit/`, a quick test set |
+| `config/repro/1607.00990.yml` | setup and curves for reproducing the paper |
+| `reference/1607.00990/` | curves extracted from the paper's vector figures (CSV) |
+| `docs/` | code review ([REVIEW.md](docs/REVIEW.md)) and reproduction results ([repro-1607.00990/](docs/repro-1607.00990/summary.md)) |
+| `fit/` | mass fit (sub): `TMDP.py`, `ScanMass.py`, `ScanWidth.py`, `Scan2D.py`, fit inputs in `fit/config/` |
+| `tests/fortran/`, `tests/fit/` | spot checks against the paper; end-to-end smoke test and config consistency of the fit |
+| `docker/Dockerfile` | toolchain image `tmdp`: gfortran, LHAPDF 6.5.5 + CT14 sets, CHAPLIN 1.2, ROOT 6.34, poppler |
 
 ## Quick start (Docker)
 
 Everything runs in a container, with the repository mounted at `/work`.
 
 ```bash
-docker build -t pytmdp:dev docker                    # once
-docker run --rm -v "$PWD:/work" pytmdp:dev make -C fortran
-docker run --rm -v "$PWD:/work" pytmdp:dev python3 -m pytest -q tests
+docker build -t tmdp:dev docker                      # once
+docker run --rm -v "$PWD:/work" tmdp:dev make -C fortran
+docker run --rm -v "$PWD:/work" tmdp:dev python3 -m pytest -q tests
 ```
 
 On Windows Git Bash, prefix the commands with `MSYS_NO_PATHCONV=1` and use an absolute path such as
-`-v "D:/Physics/pyTMDP:/work"`. For an interactive shell, use
-`docker run --rm -it -v "$PWD:/work" pytmdp:dev`.
+`-v "D:/Physics/top-mass-from-diphoton-spectrum:/work"`. For an interactive shell, use
+`docker run --rm -it -v "$PWD:/work" tmdp:dev`.
 
-## Inputs: `yaml/`
+## Signal calculation
 
-All inputs are YAML files under `yaml/`. Each fit input reads its templates and backgrounds from a
-directory `dir`. Each such directory is one template set, made by one config in
-`yaml/templates/`:
+`fortran/build/mktemplate.exe` computes $d\sigma(pp\to gg\to\gamma\gamma)/dm_{\gamma\gamma}$ [fb/GeV]
+on an $m_{\gamma\gamma}$ grid for one $(m_t,\Gamma_t)$. The amplitude includes:
 
-| Template set (`Template/…`) | $\sqrt s$ | $p_T$ cut | Fit inputs (`yaml/fit/`) | Templates |
-|---|---|---|---|---|
-| `LHC13T` | 13 TeV | tight | `input_LHC13T.yml`, `inputWidth_LHC13T.yml` | 50 |
-| `LHC13L` | 13 TeV | loose | `input_LHC13L.yml` | 33 |
-| `HELHC27T` | 27 TeV | tight | `input_HELHC27T.yml`, `input2D_HELHC27T.yml` | 185 |
-| `FCC100` | 100 TeV | tight | `input_FCC100.yml`, `inputWidth_FCC100.yml`, `input2D_FCC100.yml` | 379 |
-| `test` | 13 TeV | tight | — (used by `tests/`) | 2 |
+- the five light-quark loops,
+- the top loop,
+- the Green-function correction $\mathcal{B}(G-G_0)$.
 
-- *tight* means $p_T>0.4\,m_{\gamma\gamma}$ in addition to $p_T>40$ GeV and $|\eta|<2.5$; *loose*
-  drops the relative cut.
-- The meaning of `T`/`L` in the set names is inferred from the "Tight PTCUT" comments in
-  `fortran/gg2aa`. It is not documented in the 2018 files.
-- A template config lists its fit inputs under `fit_inputs`. The templates to compute are
-  collected from their `files_sig` and `files_template`, so the two sides cannot drift apart.
-- `tests/test_yaml.py` checks that every fit input belongs to exactly one template config, with the
-  same directory and $\sqrt s$, and that all its templates are covered.
+The $p_T$/$\eta$ integral is done with VEGAS. Parameters are read from a namelist on standard input;
+see the header of `fortran/src/mktemplate.f`.
 
-### Generate templates
-
-```bash
-docker run --rm -v "$PWD:/work" pytmdp:dev \
-    python3 scripts/make_templates.py yaml/templates/LHC13T.yml -j 16
-```
-
-`--check` lists the templates of a set and checks the config without running anything.
-
-- Templates are written to the `outdir` of the config (for example `Template/LHC13T/`), together
-  with a `manifest.json` that records the configuration and the git commit.
-- Existing files are skipped unless you pass `--force`.
-- One production template (1001 points, VEGAS 50 000 calls × 6 iterations) is estimated to take about 80 min on
-  one core (scaled from a timed low-statistics run). For example, `LHC13T` (50 templates) takes
-  about 3.5 h on 20 cores, and `FCC100` (379 templates) about 25 h.
-
-Template-config keys (`outdir` is required, plus `fit_inputs` and/or `masses` × `widths`; the
-defaults are those of `MKD_gg2aa.f`):
-
-| Key | Meaning | Default |
+| Namelist | Meaning | Default |
 |---|---|---|
-| `rs` | $\sqrt s$ [GeV] | 100000 |
-| `pdfset` | LHAPDF set (must be installed in the image) | `CT14lo` |
-| `outdir` | output directory; must equal the `dir` of every fit input | — |
-| `fit_inputs` | fit inputs whose `files_sig` + `files_template` are computed | — |
-| `masses`, `widths` | additional grid: list, or `{start, stop, step}` [GeV] | — |
-| `mu_green` | scale of $\alpha_s$ in the Green function [GeV] | 40 |
-| `etamax`, `ptmin` | photon $\lvert\eta\rvert$ and $p_T$ cuts | 2.5, 40 |
-| `ptratio` | relative cut $p_T>{\rm ptratio}\cdot m_{\gamma\gamma}$; 0 = loose | 0.4 |
-| `maa_min`, `maa_max`, `maa_step` | $m_{\gamma\gamma}$ grid [GeV]. `TMDP.py` requires 300, 400, 0.1 | 300, 400, 0.1 |
-| `ncall`, `itmx` | VEGAS calls per point and iterations | 50000, 6 |
+| `RS` | $\sqrt s$ [GeV] | 100000 |
+| `PDFSET` | LHAPDF set | `CT14lo` |
+| `MT`, `GT` | $m_t$, $\Gamma_t$ [GeV] | 173, 1.5 |
+| `MUG` | scale $\mu$ of $\alpha_s$ in the Green function [GeV] | 40 |
+| `IORDG` | QCD potential in the Green function: 0 LO, 1 NLO | 1 |
+| `MODE` | top amplitude: 3 matched (one-loop + $\mathcal{B}(G-G_0)$), 0 one-loop only | 3 |
+| `NQCDIN` | order of the $\alpha_s$ running (libQCD), from $\alpha_s(M_Z)=0.1185$ | 0 (LO) |
+| `ETMAX`, `PTMIN`, `PTRATIO` | $\lvert\eta_\gamma\rvert<$ `ETMAX`, $p_T^\gamma>$ `PTMIN`, $p_T^\gamma>$ `PTRATIO` $\cdot m_{\gamma\gamma}$ (0 = off) | 2.5, 40, 0.4 |
+| `MAAMIN`, `MAAMAX`, `DMAA` | $m_{\gamma\gamma}$ grid [GeV] | 300, 400, 0.1 |
+| `NCALL`, `ITMX` | VEGAS calls and iterations per point | 50000, 6 |
+| `LEGACYCUT` | 1 = reproduce the 2016 behaviour outside the cuts ([REVIEW](docs/REVIEW.md) P3) | 0 |
+| `OUTFILE` | output: `m_aa  dsigma/dm_aa  error` per line | `Tab_<MT>_<GT>.dat` |
 
-The physics settings are those of `MKD_gg2aa.f`: CT14lo, $\alpha=1/128$, $\mu_R=\mu_F=m_{\gamma\gamma}$,
-LO running of $\alpha_s$, and an NLO Coulomb potential in the Green function.
+Fixed in the code: $\alpha=1/128$ and $\mu_R=\mu_F=m_{\gamma\gamma}$.
 
-### Run a mass scan
-
-Put the background files in the template directory, then run:
+### Templates
 
 ```bash
-docker run --rm -v "$PWD:/work" pytmdp:dev python3 ScanMass.py yaml/fit/input_LHC13T.yml 1000
+docker run --rm -v "$PWD:/work" tmdp:dev \
+    python3 scripts/make_templates.py config/templates/paper1607_LHC13.yml -j 16
 ```
 
-`ScanWidth.py` and `Scan2D.py` take `yaml/fit/inputWidth_*.yml` and `yaml/fit/input2D_*.yml`. Paths
-in the fit inputs (`dir`) are relative to the repository root, so run the scans from there.
+- A template set (`config/templates/*.yml`) fixes the physics settings and the $(m_t,\Gamma_t)$
+  points. Points are given as `masses` × `widths`, as a list of such `grids`, or as explicit
+  `points`.
+- Each point is one `mktemplate` run, written to `outdir` as `Tab_<mt>_<Gt>.dat` together with a
+  `manifest.json` (configuration and git commit).
+- Existing files are skipped unless `--force` is given; `--check` only lists the points.
+- One template (1001 points, VEGAS 50 000 × 6) takes about 80 min on one core, estimated from a
+  timed low-statistics run.
 
-Fit-input keys (`yaml/fit/*.yml`, as read by `TMDP.set_init`):
-
-| Key | Meaning |
-|---|---|
-| `dir` | directory with templates and background files |
-| `rs`, `lum`, `corr` | $\sqrt s$ [GeV], luminosity [fb⁻¹], overall correction factor |
-| `kgg` | $gg\to\gamma\gamma$ (signal) fraction of all events |
-| `sig_dir`, `sig_one`, `sig_two` | background cross sections in 300–400 GeV [pb] |
-| `Nevnt` | total number of events; if omitted, $\sigma_{\rm bg}\cdot L\cdot 10^3\cdot{\rm corr}/(1-k_{gg})$ |
-| `hbin`, `fmin`, `fmax`, `fitopt` | histogram bins in 300–400 GeV, fit range [GeV], ROOT fit options |
-| `files_dir`, `files_one`, `files_two` | background event files |
-| `files_sig` | template used to generate the pseudo-data (true mass) |
-| `files_template` | templates fitted to each pseudo-dataset |
-
-The units of `sig_*` are inferred from the `Nevnt` formula and have not been checked against the
-original setup.
+| Template set | Setup | Templates |
+|---|---|---|
+| `paper1607_LHC13`, `paper1607_FCC100` | arXiv:1607.00990: CT14nlo, $\Gamma_t=1.498$ GeV, LHC $p_T>40$ GeV / FCC $p_T>0.4\,m_{\gamma\gamma}$; $m_t$ = 165–181 GeV | 33 each |
+| `LHC13T`, `LHC13L`, `HELHC27T`, `FCC100` | the 2018 sets read by `fit/config/`: mass scans at $\Gamma_t=1.5$ GeV plus width and 2D scans, CT14lo assumed; T = tight, L = loose $p_T$ cut (inferred) | 50, 33, 185, 379 |
+| `test` | two masses, low statistics, for `tests/` | 2 |
 
 ## Reproducing arXiv:1607.00990
 
 ```bash
-docker run --rm -v "$PWD:/work" pytmdp:dev make -C fortran
-docker run --rm -v "$PWD:/work" pytmdp:dev \
-    python3 scripts/reproduce_1607_00990.py yaml/repro/1607.00990.yml -j 20
+docker run --rm -v "$PWD:/work" tmdp:dev make -C fortran
+docker run --rm -v "$PWD:/work" tmdp:dev \
+    python3 scripts/reproduce_1607_00990.py config/repro/1607.00990.yml -j 20
 ```
 
-This computes every curve of Figs. 1 and 4 of the paper with the paper's setup:
-19 curves, about 6000 $m_{\gamma\gamma}$ points, roughly 30 min on 20 cores.
+This computes every curve of Figs. 1 and 4 of the paper with the paper's setup: 19 curves, about
+6000 $m_{\gamma\gamma}$ points, roughly 40 min on 20 cores.
 
 - **Outputs.** In `results/1607.00990/`:
   - one `.dat` file per curve
@@ -189,12 +140,11 @@ This computes every curve of Figs. 1 and 4 of the paper with the paper's setup:
   - `summary.md`
 - **Comparison.** Each curve is compared with the same curve extracted from the paper's vector
   figures (`reference/1607.00990/`, made by `scripts/tools/digitize_1607_00990.py` from the
-  arXiv source). The script exits with status 0 when every curve agrees within the tolerance
-  (1%).
-- **Spot checks.** `tests/test_repro_1607_00990.py` checks six points (dip, bump, LO Green
+  arXiv source). The script exits with status 0 when every curve agrees within 1%.
+- **Spot checks.** `tests/fortran/test_repro_1607_00990.py` checks six points (dip, bump, LO Green
   function, FCC) to within 0.5% in about 30 s.
 
-Setup (`yaml/repro/1607.00990.yml`):
+Setup (`config/repro/1607.00990.yml`):
 
 - **From the paper.** CT14NLO; $\mu_R=\mu_F=m_{\gamma\gamma}$; $|\eta_\gamma|<2.5$.
   - Photon cut: $p_T^\gamma>40$ GeV at the LHC, and additionally $p_T^\gamma>0.4\,m_{\gamma\gamma}$
@@ -202,8 +152,7 @@ Setup (`yaml/repro/1607.00990.yml`):
   - Top quark: $m_t=173$ GeV, $\Gamma_t=1.498$ GeV.
   - Green function: NLO (Fig. 1 left: LO), with $\mu=40$ GeV (Fig. 1: 20–160 GeV).
 - **Not in the paper, but needed to match it.** $\alpha_s$ is run at LO from
-  $\alpha_s(M_Z)=0.1185$ (libQCD `NQCD=0`, as in `MKD_gg2aa.f`). With NLO running the cross
-  section is 1.4% lower everywhere.
+  $\alpha_s(M_Z)=0.1185$ (`NQCDIN=0`). With NLO running the cross section is 1.4% lower everywhere.
 
 **Result (2026-10-08): all 19 curves agree with the paper.** The largest deviation is 0.31%,
 and the mean deviation of every curve is below 0.02%. The dip and bump positions agree to within
@@ -219,21 +168,22 @@ one grid step (0.1 GeV for Fig. 1, 0.25 GeV for Fig. 4). The full table and the 
 
 ![Fig. 1 right reproduced](docs/repro-1607.00990/fig1R.png)
 
-To make pyTMDP templates with this setup, use `yaml/templates/paper1607_LHC13.yml` and
-`paper1607_FCC100.yml` with `scripts/make_templates.py`. The background samples are inputs and are
-not produced here.
+## The 2016 drivers (`fortran/legacy/`)
 
-## Background data
+These are the programs used for arXiv:1607.00990: `MKD_gg2aa.f` (templates), `Sig_gg2aa.f`,
+`DSig_*.f`, `Scl_gg2aa.f`, `Argand_gg2aa.f`, and others. They are kept unchanged for reference, and
+`make -C fortran legacy` builds the seven that do not need BASES.
 
-`TMDP.read_events_from_file` expects plain text with one $m_{\gamma\gamma}$ value [GeV] per event,
-separated by whitespace, in 300–400 GeV. The 2018 files are not available, and the generator used
-to make them (for example DIPHOX) has not been confirmed. Producing them is outside the scope of the
-current milestone.
+Their integrands return an undefined value for phase-space points rejected by the cuts. Depending on
+the compiler, the result changes by up to a factor of 2 ([REVIEW](docs/REVIEW.md) P3).
+`mktemplate.f` fixes this (`LEGACYCUT=0`) and can reproduce the old behaviour exactly
+(`LEGACYCUT=1`). The paper's figures correspond to the fixed behaviour.
 
-## Known issues and plans
+## Mass fit (`fit/`)
 
-See [docs/REVIEW.md](docs/REVIEW.md) for the full list and proposed fixes. Fixes are made after
-review, in separate issues and PRs. Progress is tracked in issue #7.
+The 2018 pseudo-experiment code: template fit of $m_t$ and $\Gamma_t$ with a smooth background
+function. The background samples are inputs (not produced here). See
+[fit/README.md](fit/README.md).
 
 ## Licence
 
@@ -241,10 +191,10 @@ review, in separate issues and PRs. Progress is tracked in issue #7.
 as long as the copyright notice and the licence text are kept. If you use it in a publication,
 please cite arXiv:1607.00990.
 
-The MIT licence does not cover the third-party code in `fortran/`: HPLOG, DDILOG, QCD-PEGASUS, a
-VEGAS variant and the CHAPLIN interface header. These are shipped unchanged and remain under the
-terms of their authors; see [THIRD_PARTY.md](THIRD_PARTY.md). Their licences have not been checked
-yet.
+The MIT licence does not cover the third-party code in `fortran/extern/`: HPLOG, DDILOG,
+QCD-PEGASUS, a VEGAS variant and the CHAPLIN interface header. These are shipped unchanged and
+remain under the terms of their authors; see [THIRD_PARTY.md](THIRD_PARTY.md). Their licences have
+not been checked yet.
 
 ## Author
 

@@ -1,6 +1,6 @@
 # Reproduction of arXiv:1607.00990 (signal)
 
-Config: `yaml/repro/1607.00990.yml`, tolerance 1.0%. Result: **PASS**
+Config: `config/repro/1607.00990.yml`, tolerance 1.0%. Result: **PASS**
 
 | curve | max abs. rel. dev. | at m_aa [GeV] | mean rel. dev. | dip / bump, ours [GeV] | dip / bump, paper [GeV] |
 |---|---|---|---|---|---|
