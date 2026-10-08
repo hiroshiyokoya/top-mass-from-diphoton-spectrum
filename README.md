@@ -7,8 +7,13 @@ In $gg\to\gamma\gamma$ the top quark enters only through the one-loop box. Its a
 at $m_{\gamma\gamma}=2m_t$ and produces a dip–bump structure in $d\sigma/dm_{\gamma\gamma}$. Near
 threshold, the top-loop amplitude is matched to the NRQCD Green function of the $t\bar t$
 system,
-$M_t^{\rm 1loop}+\mathcal{B}_t\left[G(\vec 0;E+i\Gamma_t)-G^{(0)}(\vec 0;E)\right]$ with
-$E=m_{\gamma\gamma}-2m_t$, where $G^{(0)}$ is the Green function without QCD interaction and width.
+
+```math
+M_t^{\rm match} = M_t^{\rm 1loop} + \mathcal{B}_t \left[ G(\vec 0; E+i\Gamma_t) - G^{(0)}(\vec 0; E) \right] ,
+\qquad E = m_{\gamma\gamma} - 2m_t ,
+```
+
+where $G^{(0)}$ is the Green function without QCD interaction and width.
 This resums the Coulomb (bound-state) effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
 
 - S. Kawabata and H. Yokoya, *Top-quark mass from the diphoton mass spectrum*,
