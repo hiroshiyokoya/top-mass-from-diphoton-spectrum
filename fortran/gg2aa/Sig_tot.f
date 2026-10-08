@@ -1,0 +1,264 @@
+      PROGRAM MAIN
+      IMPLICIT NONE
+      INTEGER I,J,K,NEVT
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,ETMAX,PTMIN,MAAMIN,MAAMAX
+      COMMON /SIGAA/   MT,GT,MU,ASG,RS,ETMAX,PTMIN,MAAMIN,MAAMAX
+      DOUBLE PRECISION ALP,ASR,MUR
+      COMMON /COUP/    ALP,ASR,MUR
+      DOUBLE COMPLEX INT3
+      EXTERNAL       INT3
+      DOUBLE PRECISION S1,S2,S3,S4
+      COMMON /RESULT/  S1,S2,S3,S4
+      DOUBLE PRECISION ET1,ET2,MAA
+      COMMON /EVENTS/  ET1,ET2,MAA
+      INCLUDE 'parameter.inc'
+      INCLUDE 'qcdparam.inc'
+      INCLUDE 'qcdfunc.inc'
+C.....
+      ALP = 1D0/128D0
+      NQCD = 0
+      CALL QCDLIBS
+C.....
+      MU = 40D0
+      ASG = ASQCD(MU)
+C.....
+      RS = 13D3                 ! LHC  13TeV
+c     RS = 100D3                ! FCC 100TeV
+      MT = 173D0
+      GT = 1.5D0
+      MAAMIN = 300D0
+      MAAMAX = 400D0
+      ETMAX  = 2.5D0
+      PTMIN  =  40D0
+C...  LHAPDF Initialization
+c      CALL INITPDFSETBYNAME ('CT14lo')
+      CALL INITPDFSETBYNAME ('CT14nlo')
+c      CALL INITPDFSETBYNAME ('cteq6l1')
+C.....
+      CALL BSINIT
+      CALL USERIN
+      CALL BASES (INT3,S1,S2,CTIME,IT1,IT2)
+      CALL BSINFO ( 6)
+      CALL BSINFO ( 7)
+      CALL BHPLOT ( 7)
+      CALL BSWRIT (73)
+C.....
+      WRITE ( 6,'(3F12.4,1X,2(1PE15.5)))') RS, MAAMIN,MAAMAX, S1,S2
+C.....
+c      LUM  = 300D0
+c      NEVT = INT(S1*LUM)
+c      PRINT  *, LUM, NEVT
+c      DO I = 1, NEVT
+c         CALL SPRING (INT3,50)
+c         WRITE (50,*) ET1,ET2,MAA
+c      ENDDO
+c      CALL SPINFO (8)
+c      CALL SHPLOT (8)
+C.....
+ 100  CONTINUE
+C.....
+      STOP
+      END
+      
+      DOUBLE PRECISION FUNCTION INT3 (X)
+      IMPLICIT NONE
+      DOUBLE PRECISION X(3)
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,ETMAX,PTMIN,MAAMIN,MAAMAX
+      COMMON /SIGAA/   MT,GT,MU,ASG,RS,ETMAX,PTMIN,MAAMIN,MAAMAX
+      DOUBLE PRECISION ALP,ASR,MUR
+      COMMON /COUP/    ALP,ASR,MUR
+      DOUBLE PRECISION TAU,TAUMAX,TAUMIN,TAUJAC
+      DOUBLE PRECISION ET1,ET1MAX,ET1MIN,ET1JAC
+      DOUBLE PRECISION ET2,ET2MAX,ET2MIN,ET2JAC
+      DOUBLE PRECISION YMAX,YMIN,YJAC
+      DOUBLE PRECISION CMAX,CMIN,CJAC
+      DOUBLE PRECISION MAA,Y,COS,R,ETHAT,PTA
+      DOUBLE PRECISION X1,X2,MUF,LUM
+      DOUBLE COMPLEX   GG2AAQ,GG2AAT,GG2AAG
+      EXTERNAL         GG2AAQ,GG2AAT,GG2AAG
+      DOUBLE COMPLEX   AMP,AMPQ,AMPT,AMPG
+      DOUBLE PRECISION SAMP1,SAMP2,SAMP3,SAMP4,SAMP5
+      DOUBLE PRECISION SAMPQ,SAMPG,FACQ,FACG,SIGQ,SIGG,JAC
+      DOUBLE PRECISION Q2Q,Q2T
+      COMMON /EVENTS/  ET1,ET2,MAA
+      PARAMETER ( Q2Q = 1.22222222D0, Q2T = 0.4444444444D0 )
+      DOUBLE PRECISION ONE,TWO,FOUR,HALF
+      PARAMETER ( ONE = 1D0, TWO = 2D0, FOUR = 4D0, HALF = 0.5D0 )
+      INTEGER I,IHEL,L1234L(4,16)
+      DATA (L1234L(I, 1),I=1,4) / 1, 1, 1, 1/
+      DATA (L1234L(I, 2),I=1,4) / 1, 1, 1,-1/
+      DATA (L1234L(I, 3),I=1,4) / 1, 1,-1, 1/
+      DATA (L1234L(I, 4),I=1,4) / 1, 1,-1,-1/
+      DATA (L1234L(I, 5),I=1,4) / 1,-1, 1, 1/
+      DATA (L1234L(I, 6),I=1,4) / 1,-1, 1,-1/
+      DATA (L1234L(I, 7),I=1,4) / 1,-1,-1, 1/
+      DATA (L1234L(I, 8),I=1,4) / 1,-1,-1,-1/
+      DATA (L1234L(I, 9),I=1,4) /-1, 1, 1, 1/
+      DATA (L1234L(I,10),I=1,4) /-1, 1, 1,-1/
+      DATA (L1234L(I,11),I=1,4) /-1, 1,-1, 1/
+      DATA (L1234L(I,12),I=1,4) /-1, 1,-1,-1/
+      DATA (L1234L(I,13),I=1,4) /-1,-1, 1, 1/
+      DATA (L1234L(I,14),I=1,4) /-1,-1, 1,-1/
+      DATA (L1234L(I,15),I=1,4) /-1,-1,-1, 1/
+      DATA (L1234L(I,16),I=1,4) /-1,-1,-1,-1/
+      COMMON /HEL/ L1234L
+C.....
+      DOUBLE PRECISION PDF1(-6:6), PDF2(-6:6)
+      EXTERNAL EVOLVEPDF
+C.....
+      INCLUDE 'qcdparam.inc'
+      INCLUDE 'qcdfunc.inc'
+      SIGQ = 0D0
+      SIGG = 0D0
+      INT3 = 0D0
+C...  Integrate over Maa, Eta1 and Eta2
+      TAUMIN = MAAMIN**2/RS**2
+      TAUMAX = MAAMAX**2/RS**2
+      TAUJAC = TAUMAX - TAUMIN
+      TAU    = TAUJAC * X(1) + TAUMIN ! 
+      R      = DSQRT(TAU)
+      MAA    = RS * R
+C...
+      ET1MAX =  ETMAX
+      ET1MIN = -ET1MAX
+      ET1JAC = ET1MAX - ET1MIN
+      ET1    = ET1JAC * X(2) + ET1MIN ! 
+      ET2MAX = MIN(-ET1 - DLOG(TAU), ETMAX)
+      ET2MIN = MAX(-ET1 + DLOG(TAU),-ETMAX)
+      ET2JAC = ET2MAX - ET2MIN
+      ET2    = ET2JAC * X(3) + ET2MIN ! 
+      Y      = (ET1 + ET2) * HALF
+      ETHAT  = (ET1 - ET2) * HALF
+      COS    = DTANH(ETHAT)
+      JAC    = TAUJAC * HALF * ET1JAC * ET2JAC / DCOSH(ETHAT)**2
+C...
+*       YMAX = -DLOG(R)
+*       YMIN =  DLOG(R)
+*       YJAC = YMAX - YMIN
+*       Y    = YJAC*X(2) + YMIN
+*       CMAX = 1D0
+*       CMIN = -CMAX
+*       CJAC = CMAX - CMIN
+*       COS  = CJAC*X(3) + CMIN
+*       JAC  = TAUJAC * YJAC * CJAC
+*       ETHAT = HALF * DLOG((ONE+COS)/(ONE-COS))
+*       ET1 =  ETHAT + Y
+*       ET2 = -ETHAT + Y
+C...  Kinematical Cuts
+      PTA = MAA*DSQRT(ONE-COS**2) * HALF
+      IF ( DABS(ET1).GT.ETMAX ) RETURN
+      IF ( DABS(ET2).GT.ETMAX ) RETURN
+      IF ( PTA.LT.PTMIN ) RETURN
+c      IF ( PTA.LT.0.4*MAA ) RETURN
+C...  QCD scale
+      MUR = MAA*1.
+      ASR = ASQCD (MUR)
+C...  Gluon Distribution Function
+      MUF = MAA*1.
+      X1  = R * DEXP( Y)
+      X2  = R * DEXP(-Y)
+      CALL EVOLVEPDF (X1,MUF,PDF1)
+      CALL EVOLVEPDF (X2,MUF,PDF2)
+C...  QQbar Initial Process
+      LUM =  (4D0/9D0)**2 * ( PDF1( 2)*PDF2(-2) + PDF1(-2)*PDF2( 2)
+     -     +                  PDF1( 4)*PDF2(-4) + PDF1(-4)*PDF2( 4) )
+     -     + (1D0/9D0)**2 * ( PDF1( 1)*PDF2(-1) + PDF1(-1)*PDF2( 1)
+     -     +                  PDF1( 3)*PDF2(-3) + PDF1(-3)*PDF2( 3)
+     -     +                  PDF1( 5)*PDF2(-5) + PDF1(-5)*PDF2( 5) )
+C---- Matrix Elements Square
+      SAMPQ = DCOSH(2D0*ETHAT)
+      FACQ  = PI*ALP**2/(3D0*MAA**2)
+      SIGQ  = FACQ * SAMPQ * LUM / (X1*X2) ! dSigma / dTau [fb]
+C---- Matrix Elements Square ----
+c      AMPT = DCMPLX(0D0,0D0)
+c      AMPG = DCMPLX(0D0,0D0)
+cC...  PPPP
+c      AMPQ  = GG2AAQ (   MAA,COS,L1234L(1,1))
+c      AMPT  = GG2AAT (MT,MAA,COS,L1234L(1,1))
+cc      AMPG  = GG2AAG (MT,GT,MU,ASG,MAA,COS,L1234L(1,1),3)
+c      AMP   = Q2Q*AMPQ + Q2T*(AMPT+AMPG)
+c      SAMP1 = DBLE(AMP*DCONJG(AMP))
+cC...  MPPP
+c      AMPQ  = GG2AAQ (   MAA,COS,L1234L(1,2))
+c      AMPT  = GG2AAT (MT,MAA,COS,L1234L(1,2))
+cc      AMPG  = GG2AAG (MT,GT,MU,ASG,MAA,COS,L1234L(1,2),3)
+c      AMP   = Q2Q*AMPQ + Q2T*(AMPT+AMPG)
+c      SAMP2 = DBLE(AMP*DCONJG(AMP))
+cC...  MMPP
+c      AMPQ  = GG2AAQ (   MAA,COS,L1234L(1,4))
+c      AMPT  = GG2AAT (MT,MAA,COS,L1234L(1,4))
+cc      AMPG  = GG2AAG (MT,GT,MU,ASG,MAA,COS,L1234L(1,4),3)
+c      AMP   = Q2Q*AMPQ + Q2T*(AMPT+AMPG)
+c      SAMP3 = DBLE(AMP*DCONJG(AMP))
+cC...  MPMP
+c      AMPQ  = GG2AAQ (   MAA,COS,L1234L(1,6))
+c      AMPT  = GG2AAT (MT,MAA,COS,L1234L(1,6))
+cc      AMPG  = GG2AAG (MT,GT,MU,ASG,MAA,COS,L1234L(1,6),3)
+c      AMP   = Q2Q*AMPQ + Q2T*(AMPT+AMPG)
+c      SAMP4 = DBLE(AMP*DCONJG(AMP))
+cC...  MPPM
+c      AMPQ  = GG2AAQ (   MAA,COS,L1234L(1,7))
+c      AMPT  = GG2AAT (MT,MAA,COS,L1234L(1,7))
+cc      AMPG  = GG2AAG (MT,GT,MU,ASG,MAA,COS,L1234L(1,7),3)
+c      AMP   = Q2Q*AMPQ + Q2T*(AMPT+AMPG)
+c      SAMP5 = DBLE(AMP*DCONJG(AMP))
+c      SAMPG = 2D0*SAMP1 + 8D0*SAMP2 + 2D0*SAMP3 + 2D0*SAMP4 + 2D0*SAMP5
+cC...  Hadronic Cross Section
+c      FACG  = ALP**2*ASR**2/(128D0*PI*MAA**2)
+c      SIGG  = FACG * SAMPG * PDF1(0)*PDF2(0) / (X1*X2)
+C.....
+      INT3  = (SIGQ + SIGG) * JAC * 389429.57D6 ! [fb]
+C.....
+      CALL XHFILL ( 1,X(1),INT3)
+      CALL XHFILL ( 2,X(2),INT3)
+      CALL XHFILL ( 3,X(3),INT3)
+      CALL XHFILL ( 4, MAA,INT3)
+      CALL XHFILL ( 5, ET1,INT3)
+      CALL XHFILL ( 6, ET2,INT3)
+      CALL XHFILL ( 7, PTA,INT3)
+C.....
+      RETURN
+      END
+
+      SUBROUTINE USERIN
+      IMPLICIT NONE
+      INCLUDE 'parameter.inc'
+      INTEGER MAXDIM
+      PARAMETER (MAXDIM=100)
+      DOUBLE PRECISION XL(MAXDIM),XU(MAXDIM)
+      INTEGER IG(MAXDIM)
+      INTEGER NCALL, ITMX1, ITMX2
+      DOUBLE PRECISION ACC1, ACC2
+      INTEGER IDIM
+C.....
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,ETMAX,PTMIN,MAAMIN,MAAMAX
+      COMMON /SIGAA/   MT,GT,MU,ASG,RS,ETMAX,PTMIN,MAAMIN,MAAMAX
+C
+      NDIM  = 3
+      NWILD = 3
+C
+      DO IDIM = 1, NDIM
+         XL(IDIM) = 0D0
+         XU(IDIM) = 1D0
+         IG(IDIM) = 1
+      ENDDO
+C
+      CALL BSSETD (NDIM,NWILD,XL,XU,IG)
+C
+      NCALL = 1 000 000
+      ITMX1 = 6
+      ITMX2 = 6
+      ACC1  = 0.05D0
+      ACC2  = 0.05D0
+C
+      CALL BSSETP (NCALL,ITMX1,ITMX2,ACC1,ACC2)
+      CALL XHINIT (1, 0D0,1D0,50,'D SIGMA / D X(1)')
+      CALL XHINIT (2, 0D0,1D0,50,'D SIGMA / D X(2)')
+      CALL XHINIT (3, 0D0,1D0,50,'D SIGMA / D X(2)')
+      CALL XHINIT (4,MAAMIN,MAAMAX,50,'D SIGMA / D MAA')
+      CALL XHINIT (5,-ETMAX,ETMAX,50,'D SIGMA / D Et1')
+      CALL XHINIT (6,-ETMAX,ETMAX,50,'D SIGMA / D Et2')
+      CALL XHINIT (7, PTMIN,500d0,50,'D SIGMA / D pTa')
+C
+      RETURN
+      END

@@ -1,0 +1,75 @@
+# Reproduction of the gg -> gamma gamma signal of arXiv:1607.00990
+# (S. Kawabata and H. Yokoya, Eur. Phys. J. C 77 (2017) 323).
+#
+#   python3 scripts/reproduce_1607_00990.py yaml/repro/1607.00990.yml
+#
+# Setup as stated in the paper (Sec. 4 and the figure legends): CT14NLO,
+# mu_R = mu_F = m_aa, |eta| < 2.5, pT > 40 GeV (LHC) or pT > 0.4 m_aa
+# (FCC), G_NLO with mu = 40 GeV, Gamma_t = 1.498 GeV.
+# Not stated in the paper: alpha_s(mu_R) and alpha_s(mu) of the Green
+# function are evaluated with LO running from alpha_s(M_Z) = 0.1185 (libQCD,
+# NQCDIN = 0, as in MKD_gg2aa.f).  With NLO running (NQCDIN = 1) the cross
+# section is 1.4% lower than in the paper at all m_aa.
+# The cuts are applied correctly (LEGACYCUT = 0): the paper's figures do not
+# show the undefined-result effect of docs/REVIEW.md P3.
+# The reference curves in reference/1607.00990/ were extracted from the
+# vector figures of the arXiv source (scripts/tools/digitize_1607_00990.py).
+
+outdir: results/1607.00990
+reference_dir: reference/1607.00990
+ncall: 50000
+itmx: 6
+chunk: 25                 # m_aa points per job
+tolerance: 0.01           # max |relative deviation| allowed per curve
+
+common:                   # namelist values shared by all curves
+  PDFSET: CT14nlo
+  NQCDIN: 0
+  LEGACYCUT: 0
+  GT: 1.498
+  MT: 173.0
+  MUG: 40.0
+  ETMAX: 2.5
+  PTMIN: 40.0
+
+figures:
+  fig1R:
+    title: 'Fig. 1 (right): LHC 13 TeV, NLO Green function'
+    grid: {min: 330., max: 360., step: 0.1}
+    set: {RS: 13000., PTRATIO: 0., IORDG: 1}
+    curves:
+      one_loop: {MODE: 0}
+      GNLO_mu20: {MUG: 20.}
+      GNLO_mu40: {MUG: 40.}
+      GNLO_mu80: {MUG: 80.}
+      GNLO_mu160: {MUG: 160.}
+  fig1L:
+    title: 'Fig. 1 (left): LHC 13 TeV, LO Green function'
+    grid: {min: 330., max: 360., step: 0.1}
+    set: {RS: 13000., PTRATIO: 0., IORDG: 0}
+    curves:
+      one_loop: {MODE: 0}
+      GLO_mu20: {MUG: 20.}
+      GLO_mu40: {MUG: 40.}
+      GLO_mu80: {MUG: 80.}
+      GLO_mu160: {MUG: 160.}
+  fig4L:
+    title: 'Fig. 4 (left): LHC 13 TeV, templates'
+    grid: {min: 300., max: 400., step: 0.25}
+    set: {RS: 13000., PTRATIO: 0.}
+    curves:
+      mt167: {MT: 167.}
+      mt170: {MT: 170.}
+      mt173: {MT: 173.}
+      mt176: {MT: 176.}
+      mt179: {MT: 179.}
+  fig4R:
+    title: 'Fig. 4 (right): FCC 100 TeV, templates, pT > 0.4 m_aa'
+    grid: {min: 300., max: 400., step: 0.25}
+    set: {RS: 100000., PTRATIO: 0.4}
+    curves:
+      mt167: {MT: 167.}
+      mt170: {MT: 170.}
+      mt173: {MT: 173.}
+      mt176: {MT: 176.}
+      mt179: {MT: 179.}
