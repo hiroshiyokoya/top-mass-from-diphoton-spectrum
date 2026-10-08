@@ -1,0 +1,10 @@
+# Quick smoke test: two masses on the standard M_aa grid (300-400 GeV in
+# 0.1 GeV steps, as assumed by TMDP.py) with very few VEGAS calls.
+# The output is statistically noisy and only good for testing the chain.
+outdir: Template/test
+rs: 13000.
+pdfset: CT14lo
+ncall: 2000
+itmx: 2
+masses: [172., 173.]
+widths: [1.5]

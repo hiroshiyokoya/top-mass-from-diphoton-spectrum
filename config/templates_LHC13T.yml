@@ -1,0 +1,19 @@
+# Templates for input_LHC13T.yml / inputWidth_LHC13T.yml (pp at 13 TeV).
+# Physics settings follow fortran/gg2aa/MKD_gg2aa.f; the PDF set used for
+# the 2018 template files is not recorded (CT14lo assumed).
+outdir: Template/LHC13T
+rs: 13000.          # [GeV]
+pdfset: CT14lo
+mu_green: 40.       # alpha_s scale in the Green function [GeV]
+etamax: 2.5
+ptmin: 40.          # [GeV]; in addition pT > 0.4 M_aa (hard-coded)
+maa_min: 300.
+maa_max: 400.
+maa_step: 0.1
+ncall: 50000        # VEGAS calls per M_aa point
+itmx: 6
+masses: [160., 161., 162., 163., 164., 165., 166., 167., 168., 169., 170.,
+         171., 171.5, 172., 172.5, 173., 173.5, 174., 174.5, 175., 176.,
+         177., 178., 179., 180., 181., 182., 183., 184., 185., 186., 187.,
+         188.]
+widths: [1.5]
