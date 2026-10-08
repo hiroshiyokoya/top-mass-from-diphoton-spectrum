@@ -6,3 +6,4 @@ fortran/build/
 out*.dat
 output.dat
 CLAUDE.md
+/results/

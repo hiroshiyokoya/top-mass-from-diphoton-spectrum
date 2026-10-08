@@ -1,0 +1,19 @@
+# Templates with the setup of arXiv:1607.00990 (pp at 13 TeV); see
+# yaml/repro/1607.00990.yml, which checks this setup against the paper's
+# figures.  Differences from the 2018 sets (LHC13T, ...): CT14nlo instead of
+# CT14lo, Gamma_t = 1.498 GeV, and the paper's photon cuts.
+outdir: Template/paper1607_LHC13
+rs: 13000.
+pdfset: CT14nlo
+nqcd: 0             # LO running of alpha_s (reproduces the paper)
+mu_green: 40.
+etamax: 2.5
+ptmin: 40.
+ptratio: 0.          # paper: pT > 40 GeV only at the LHC
+maa_min: 300.
+maa_max: 400.
+maa_step: 0.1
+ncall: 50000
+itmx: 6
+masses: {start: 165., stop: 181., step: 0.5}
+widths: [1.498]
