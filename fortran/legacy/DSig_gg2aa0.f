@@ -115,6 +115,7 @@ C.....
       double precision xmin,xmax
       data xmin,xmax/0.1,0.1/
 C.....
+      INT2 = 0D0 ! value outside the cuts (was unset; docs/REVIEW.md P3)
       R   = MAA/RS
       TAU = R**2
 C...  Integrate over Eta1 and Eta2
