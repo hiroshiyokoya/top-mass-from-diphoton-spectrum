@@ -40,6 +40,82 @@ def get_mass_width_from_filename(fname):
                          + fname)
     return float(match.group(1)), float(match.group(2))
 
+def parabola_minimum(values, chi2, window=4.0):
+    """Best-fit value from chi^2 on the template grid (docs/REVIEW.md P2).
+
+    A parabola is fitted to the chi^2 of the grid point with the smallest
+    chi^2 and of its neighbours: always the two nearest ones, and further
+    ones on each side while chi^2 - chi^2_min <= window.  Only the chi^2
+    values are fitted; templates are never interpolated or extrapolated.
+
+    Returns (best, sigma, status):
+      'ok'    best = vertex of the parabola, sigma = its Delta chi^2 = 1
+              half-width
+      'edge'  the smallest chi^2 is at the first or last grid point:
+              best = that grid point, sigma = nan
+      'flat'  the parabola does not open upwards, or its vertex lies outside
+              the fitted points: best = grid minimum, sigma = nan
+    """
+    values = np.asarray(values, dtype=float)
+    chi2 = np.asarray(chi2, dtype=float)
+    order = np.argsort(values)
+    x, y = values[order], chi2[order]
+    i0 = int(np.argmin(y))
+    if i0 == 0 or i0 == len(x) - 1:
+        return x[i0], np.nan, 'edge'
+    lo, hi = i0 - 1, i0 + 1
+    while lo > 0 and y[lo - 1] - y[i0] <= window:
+        lo -= 1
+    while hi < len(x) - 1 and y[hi + 1] - y[i0] <= window:
+        hi += 1
+    a, b, _ = np.polyfit(x[lo:hi + 1], y[lo:hi + 1], 2)
+    if a <= 0:
+        return x[i0], np.nan, 'flat'
+    best = -b / (2 * a)
+    if not x[lo] <= best <= x[hi]:
+        return x[i0], np.nan, 'flat'
+    return best, 1 / np.sqrt(a), 'ok'
+
+def run_scan(tmdp, values, nloop, outfile):
+    """Repeat pseudo-experiments and fit every template to each of them.
+
+    `values` is the scanned quantity of each template (m_t or Gamma_t).
+    Per pseudo-experiment the grid minimum and the parabola result of
+    parabola_minimum are recorded, written to `outfile` and summarised.
+    Returns a list of (grid_best, best, sigma, status).
+    """
+    rows = []
+    for i in range(nloop):
+        tmdp.genEvents()
+        chi2 = tmdp.fit_templates()
+        grid_best = values[int(np.argmin(chi2))]
+        rows.append((grid_best,) + parabola_minimum(values, chi2))
+        if (i + 1) % max(1, nloop // 10) == 0:
+            ok = [r[1] for r in rows if r[3] == 'ok']
+            print('{0}/{1}: current average {2}'.format(
+                i + 1, nloop, np.mean(ok) if ok else np.nan))
+    with open(outfile, 'w') as fout:
+        fout.write('# grid_best  best  sigma  status   (parabola fit to chi^2;'
+                   ' see TMDP.parabola_minimum)\n')
+        for row in rows:
+            fout.write('{0} {1:.4f} {2:.4f} {3}\n'.format(*row))
+    summarize_scan(rows)
+    return rows
+
+def summarize_scan(rows):
+    status = [r[3] for r in rows]
+    ok = np.array([r[1:3] for r in rows if r[3] == 'ok'], dtype=float)
+    grid = np.array([r[0] for r in rows], dtype=float)
+    print('pseudo-experiments: {0} (ok {1}, edge {2}, flat {3})'.format(
+        len(rows), status.count('ok'), status.count('edge'),
+        status.count('flat')))
+    if len(ok):
+        print('parabola fit: mean {0:.4f}, spread {1:.4f}, '
+              'mean Delta chi2 = 1 error {2:.4f}'.format(
+                  ok[:, 0].mean(), ok[:, 0].std(), ok[:, 1].mean()))
+    print('grid minimum: mean {0:.4f}, spread {1:.4f}'.format(
+        grid.mean(), grid.std()))
+
 def bin_fractions(hist, edges):
     """Fraction of the content of the ROOT histogram `hist` in each bin
     [edges[i], edges[i+1]], with the content spread uniformly inside each
@@ -222,6 +298,15 @@ class TMDP(object):
         self.hGen.SetTitle('Gen')
         self.hGen.SetName('Gen')
 
+    def fit_templates(self):
+        """Fit the current pseudo-data (hGen) with every template;
+        returns the chi^2 of each fit, in the order of files_template."""
+        chi2 = []
+        for pfnc in self.list_pfnc:
+            self.hGen.Fit(pfnc, self.fit_options)
+            chi2.append(pfnc.GetChisquare())
+        return np.array(chi2)
+
     def read_template(self):
         self.list_fname = [self.dir + temp for temp in self.files_temp]
         self.list_temp = [ GG2AA(fname, self.rs, self.hmin, self.hmax, \
@@ -314,39 +399,12 @@ if __name__ == '__main__':
 
     Nloop = 1000
 
-    results = []
-    list_best = []
-
-    for i in range(Nloop):
-        LHC.genEvents()
-        result = []
-        for mass, pfnc in zip(LHC.list_mass, LHC.list_pfnc):
-            LHC.hGen.Fit(pfnc, LHC.fit_options)
-            chi2 = pfnc.GetChisquare()
-            result.append(chi2)
-        best = LHC.list_mass[result.index(min(result))]
-        list_best.append(best)
-        results.append(result)
-        if(i % (Nloop/10) == 0):
-            print('{0}/{1}: current average {2}'.format( \
-                   i, Nloop, np.mean(list_best)))
-    # End of Nloop
+    rows = run_scan(LHC, LHC.list_mass, Nloop, 'output.dat')
 
     last_time = time.time()
     print("time for fitting: {0}".format(last_time-middle_time) + "[sec]")
 
-    print(np.mean(list_best), np.std(list_best))
-
-    with open('output.dat','w') as fout:
-        fout.write(str(list_best))
-
-    min_mass = min(LHC.list_mass)
-    max_mass = max(LHC.list_mass)
-    bin_widt = 1
-    nbin = (max_mass-min_mass)/bin_widt
-
-    # Draw a histogram of the best-fit top-quark mass
+    # Draw a histogram of the best-fit top-quark mass (parabola fits)
     plt.figure(1)
-    plt.hist(list_best, bins=int(nbin), range=(min_mass,max_mass))
+    plt.hist([r[1] for r in rows if r[3] == 'ok'], bins=40)
     plt.show()
-
