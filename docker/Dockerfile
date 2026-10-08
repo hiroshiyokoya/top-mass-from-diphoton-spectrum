@@ -40,5 +40,9 @@ ENV LD_LIBRARY_PATH=/opt/chaplin/lib:/opt/lhapdf/lib \
     CHAPLIN_DIR=/opt/chaplin \
     LHAPDF_DIR=/opt/lhapdf
 
+# poppler-utils: pdftocairo for scripts/tools/digitize_1607_00990.py
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /work
 CMD ["bash"]
