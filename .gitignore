@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+fortran/build/
+Template/
+templates/
+out*.dat
+output.dat
