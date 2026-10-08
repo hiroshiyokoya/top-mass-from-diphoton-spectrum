@@ -1,5 +1,5 @@
 """
-> python3 -i Scan_masswidth.py input.yml
+> python3 -i Scan2D.py yaml/fit/input2D_FCC100.yml
 """
 import sys
 import time

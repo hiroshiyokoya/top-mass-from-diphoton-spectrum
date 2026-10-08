@@ -5,7 +5,14 @@ Runs fortran/build/mktemplate.exe once per (m_t, Gamma_t) point, in
 parallel, and writes the files read by TMDP.GG2AA.  Intended to run
 inside the pytmdp Docker image:
 
-    python3 scripts/make_templates.py config/templates_LHC13T.yml
+    python3 scripts/make_templates.py yaml/templates/LHC13T.yml
+
+The points to compute are the union of
+  * every template named in the fit inputs listed under `fit_inputs`
+    (files_sig and files_template of yaml/fit/*.yml), and
+  * the grid `masses` x `widths`, if given.
+`--check` only verifies that the template config and its fit inputs agree
+(output directory, sqrt(s)) and lists the points, without running anything.
 
 A manifest.json with the full configuration is written next to the
 templates so that each template set records how it was made.
@@ -13,6 +20,7 @@ templates so that each template set records how it was made.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -23,6 +31,7 @@ import yaml
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_EXE = os.path.join(ROOT_DIR, 'fortran', 'build', 'mktemplate.exe')
+TEMPLATE_RE = re.compile(r'^Tab_(\d+(?:\.\d+)?)_(\d+(?:\.\d+)?)\.dat$')
 
 # namelist key -> (yml key, default); defaults follow MKD_gg2aa.f
 PARAMS = {
@@ -30,12 +39,22 @@ PARAMS = {
     'MUG': ('mu_green', 40.0),
     'ETMAX': ('etamax', 2.5),
     'PTMIN': ('ptmin', 40.0),
+    'PTRATIO': ('ptratio', 0.4),
     'MAAMIN': ('maa_min', 300.0),
     'MAAMAX': ('maa_max', 400.0),
     'DMAA': ('maa_step', 0.1),
     'NCALL': ('ncall', 50000),
     'ITMX': ('itmx', 6),
 }
+
+
+def repo_path(path):
+    return path if os.path.isabs(path) else os.path.join(ROOT_DIR, path)
+
+
+def norm_dir(path):
+    """Directory as written in a yml ('./Template/X/') -> 'Template/X'."""
+    return os.path.normpath(path).replace(os.sep, '/')
 
 
 def expand_grid(spec):
@@ -48,9 +67,60 @@ def expand_grid(spec):
     return [float(v) for v in spec]
 
 
+def format_width(gt):
+    """1.5 -> '1.50', 1.875 -> '1.875' (as in the 2018 file names)."""
+    s = '{:.3f}'.format(gt)
+    return s[:-1] if s.endswith('0') else s
+
+
 def template_name(mt, gt):
-    # Same as the Fortran format '("Tab_",F5.1,"_",F4.2,".dat")'
-    return 'Tab_{:5.1f}_{:4.2f}.dat'.format(mt, gt)
+    return 'Tab_{:.1f}_{}.dat'.format(mt, format_width(gt))
+
+
+def parse_template_name(name):
+    m = TEMPLATE_RE.match(os.path.basename(name))
+    if not m:
+        raise ValueError('not a template file name: {}'.format(name))
+    return float(m.group(1)), float(m.group(2))
+
+
+def load_yaml(path):
+    with open(repo_path(path)) as f:
+        return yaml.safe_load(f)
+
+
+def fit_input_points(fit_cfg):
+    names = list(fit_cfg.get('files_sig') or []) + \
+        list(fit_cfg.get('files_template') or [])
+    return [parse_template_name(n) for n in names]
+
+
+def collect_points(cfg):
+    """Sorted, de-duplicated (mt, gt) points requested by a template config."""
+    points = set()
+    for fit in cfg.get('fit_inputs') or []:
+        points.update(fit_input_points(load_yaml(fit)))
+    if 'masses' in cfg or 'widths' in cfg:
+        points.update((mt, gt) for gt in expand_grid(cfg['widths'])
+                      for mt in expand_grid(cfg['masses']))
+    # one file per name: equal names mean the same template
+    by_name = {template_name(mt, gt): (mt, gt) for mt, gt in points}
+    return sorted(by_name.values(), key=lambda p: (p[1], p[0]))
+
+
+def check_config(cfg):
+    """Problems (list of str) between a template config and its fit inputs."""
+    problems = []
+    outdir = norm_dir(cfg['outdir'])
+    for fit in cfg.get('fit_inputs') or []:
+        fcfg = load_yaml(fit)
+        if norm_dir(fcfg['dir']) != outdir:
+            problems.append('{}: dir {} != outdir {}'.format(
+                fit, fcfg['dir'], cfg['outdir']))
+        if float(fcfg['rs']) != float(cfg.get('rs', PARAMS['RS'][1])):
+            problems.append('{}: rs {} != {}'.format(
+                fit, fcfg['rs'], cfg.get('rs')))
+    return problems
 
 
 def namelist(cfg, mt, gt, outfile):
@@ -59,6 +129,8 @@ def namelist(cfg, mt, gt, outfile):
         val = cfg.get(ykey, default)
         if isinstance(default, int):
             lines.append(' {}={:d},'.format(key, int(val)))
+        elif key == 'PTRATIO' and ykey not in cfg:
+            continue  # keep the Fortran default (single-precision 0.4)
         else:
             lines.append(' {}={!r},'.format(key, float(val)))
     lines.append(" PDFSET='{}',".format(cfg.get('pdfset', 'CT14lo')))
@@ -88,25 +160,31 @@ def run_one(exe, cfg, mt, gt, outdir):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('config', help='yml file (see config/)')
+    parser.add_argument('config', help='template config (yaml/templates/)')
     parser.add_argument('-j', '--jobs', type=int, default=os.cpu_count(),
                         help='parallel runs (default: all CPUs)')
     parser.add_argument('--exe', default=DEFAULT_EXE)
     parser.add_argument('--force', action='store_true',
                         help='recompute templates that already exist')
+    parser.add_argument('--check', action='store_true',
+                        help='only check the config and list the points')
     args = parser.parse_args()
 
-    with open(args.config) as f:
-        cfg = yaml.safe_load(f)
-    outdir = cfg['outdir']
-    if not os.path.isabs(outdir):
-        outdir = os.path.join(ROOT_DIR, outdir)
+    cfg = load_yaml(args.config)
+    problems = check_config(cfg)
+    points = collect_points(cfg)
+    outdir = repo_path(cfg['outdir'])
+    if problems:
+        sys.exit('inconsistent config:\n  ' + '\n  '.join(problems))
+    if args.check:
+        for mt, gt in points:
+            print(template_name(mt, gt))
+        print('{} templates -> {}'.format(len(points), cfg['outdir']))
+        return
     os.makedirs(outdir, exist_ok=True)
     if not os.path.exists(args.exe):
         sys.exit('{} not found: run "make -C fortran" first'.format(args.exe))
 
-    points = [(mt, gt) for gt in expand_grid(cfg['widths'])
-              for mt in expand_grid(cfg['masses'])]
     todo = [(mt, gt) for mt, gt in points if args.force or not
             os.path.exists(os.path.join(outdir, template_name(mt, gt)))]
     print('{} templates requested, {} to compute, {} jobs -> {}'.format(
@@ -114,7 +192,7 @@ def main():
 
     manifest = {
         'config': cfg,
-        'config_file': os.path.abspath(args.config),
+        'config_file': os.path.relpath(repo_path(args.config), ROOT_DIR),
         'templates': [template_name(mt, gt) for mt, gt in points],
         'git_commit': subprocess.run(
             ['git', '-C', ROOT_DIR, 'rev-parse', 'HEAD'],

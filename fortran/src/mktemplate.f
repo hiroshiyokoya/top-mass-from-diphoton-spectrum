@@ -11,6 +11,7 @@ C       MT, GT  top mass and width [GeV]               (173.0, 1.5)
 C       MUG     scale of alpha_s in the Green function (40)
 C       ETMAX   photon |eta| cut                       (2.5)
 C       PTMIN   photon pT cut [GeV]                    (40)
+C       PTRATIO photon pT > PTRATIO*M_aa; 0 = no cut   (0.4)
 C       MAAMIN, MAAMAX, DMAA  M_aa grid [GeV]          (300, 400, 0.1)
 C       NCALL, ITMX  VEGAS calls / iterations          (50000, 6)
 C       OUTFILE output file                            (Tab_<MT>_<GT>.dat)
@@ -32,7 +33,9 @@ C     in the format read by TMDP.read_template_from_file.
       INTEGER NCALL,ITMX
       CHARACTER*64  PDFSET
       CHARACTER*256 OUTFILE
-      NAMELIST /TMPL/ RS,PDFSET,MT,GT,MUG,ETMAX,PTMIN,
+      DOUBLE PRECISION PTRATIO
+      COMMON /CUTS/    PTRATIO
+      NAMELIST /TMPL/ RS,PDFSET,MT,GT,MUG,ETMAX,PTMIN,PTRATIO,
      -     MAAMIN,MAAMAX,DMAA,NCALL,ITMX,OUTFILE
       INCLUDE 'parameter.inc'
       INCLUDE 'qcdparam.inc'
@@ -45,6 +48,7 @@ C.....Defaults (as in MKD_gg2aa.f)
       MUG    = 40D0
       ETMAX  = 2.5D0
       PTMIN  = 40D0
+      PTRATIO = 0.4E0           ! single precision, as in MKD_gg2aa.f
       MAAMIN = 300D0
       MAAMAX = 400D0
       DMAA   = 0.1D0
@@ -80,7 +84,8 @@ C.....
       STOP
       END
 C
-C     Integrand: identical to INT2 in MKD_gg2aa.f.
+C     Integrand: INT2 of MKD_gg2aa.f, with the relative pT cut
+C     (0.4 there, single precision) taken from PTRATIO.
       DOUBLE PRECISION FUNCTION INT2 (X)
       IMPLICIT NONE
       DOUBLE PRECISION X(2)
@@ -88,6 +93,8 @@ C     Integrand: identical to INT2 in MKD_gg2aa.f.
       COMMON /SIGAA/   MT,GT,MU,ASG,RS,MAA,ETMAX,PTMIN
       DOUBLE PRECISION ALP,ASR,MUR,MUF
       COMMON /COUP/    ALP,ASR,MUR,MUF
+      DOUBLE PRECISION PTRATIO
+      COMMON /CUTS/    PTRATIO
       DOUBLE PRECISION ET1,ET1MAX,ET1MIN,ET1JAC
       DOUBLE PRECISION ET2,ET2MAX,ET2MIN,ET2JAC
       DOUBLE PRECISION R,TAU,Y,ETHAT,COS,PTA
@@ -143,7 +150,7 @@ C...  Kinematical Cuts
       IF ( DABS(ET1).GT.ETMAX ) RETURN
       IF ( DABS(ET2).GT.ETMAX ) RETURN
       IF ( PTA.LT.PTMIN ) RETURN
-      IF ( PTA.LT.0.4*MAA ) RETURN
+      IF ( PTA.LT.PTRATIO*MAA ) RETURN
 C...  Gluon Distribution Function
       X1  = R * DEXP( Y)
       X2  = R * DEXP(-Y)

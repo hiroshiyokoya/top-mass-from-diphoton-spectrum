@@ -52,16 +52,16 @@ effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
 |---|---|
 | `TMDP.py` | Classes `TMDP` (inputs, pseudo-data, fit functions) and `GG2AA` (one template) |
 | `ScanMass.py`, `ScanWidth.py`, `Scan2D.py` | Scans in $m_t$, in $\Gamma_t$, and in $(m_t,\Gamma_t)$ |
-| `input*.yml` | Fit inputs for LHC 13 TeV, HE-LHC 27 TeV and FCC 100 TeV (2018) |
+| `yaml/fit/` | Fit inputs (2018): LHC 13 TeV, HE-LHC 27 TeV and FCC 100 TeV; mass, width and 2D scans |
+| `yaml/templates/` | Template-set configs, one per template directory, plus a quick test set |
 | `fortran/gg2aa/` | 2016 Fortran of arXiv:1607.00990 (amplitudes, Green functions, drivers), unchanged |
 | `fortran/QCD/` | libQCD: running $\alpha_s$ (QCD-PEGASUS), unchanged |
 | `fortran/src/mktemplate.f` | Template generator, one $(m_t,\Gamma_t)$ per run, parameters via namelist |
 | `fortran/stubs/` | No-op BASES routines (BASES is not needed for the VEGAS-based programs) |
 | `fortran/Makefile` | Linux build (the original macOS makefiles are kept as `*/Makefile.legacy`) |
 | `scripts/make_templates.py` | Runs `mktemplate.exe` over a $(m_t,\Gamma_t)$ grid in parallel |
-| `config/templates_*.yml` | Template grids matching `input_*.yml`, plus a quick test grid |
 | `docker/Dockerfile` | Toolchain image: ROOT 6.34, gfortran, LHAPDF 6.5.5 + CT14 sets, CHAPLIN 1.2 |
-| `tests/` | End-to-end smoke test (Fortran → templates → fit) |
+| `tests/` | End-to-end smoke test (Fortran → templates → fit) and yaml consistency checks |
 | `docs/REVIEW.md` | Code review (2026-10) and proposed fixes |
 | `THIRD_PARTY.md` | Third-party Fortran shipped in `fortran/` |
 
@@ -79,29 +79,58 @@ On Windows Git Bash, prefix the commands with `MSYS_NO_PATHCONV=1` and use an ab
 `-v "D:/Physics/pyTMDP:/work"`. For an interactive shell, use
 `docker run --rm -it -v "$PWD:/work" pytmdp:dev`.
 
+## Inputs: `yaml/`
+
+All inputs are YAML files under `yaml/`. Each fit input reads its templates and backgrounds from a
+directory `dir`. Each such directory is one template set, made by one config in
+`yaml/templates/`:
+
+| Template set (`Template/…`) | $\sqrt s$ | $p_T$ cut | Fit inputs (`yaml/fit/`) | Templates |
+|---|---|---|---|---|
+| `LHC13T` | 13 TeV | tight | `input_LHC13T.yml`, `inputWidth_LHC13T.yml` | 50 |
+| `LHC13L` | 13 TeV | loose | `input_LHC13L.yml` | 33 |
+| `HELHC27T` | 27 TeV | tight | `input_HELHC27T.yml`, `input2D_HELHC27T.yml` | 185 |
+| `FCC100` | 100 TeV | tight | `input_FCC100.yml`, `inputWidth_FCC100.yml`, `input2D_FCC100.yml` | 379 |
+| `test` | 13 TeV | tight | — (used by `tests/`) | 2 |
+
+- *tight* means $p_T>0.4\,m_{\gamma\gamma}$ in addition to $p_T>40$ GeV and $|\eta|<2.5$; *loose*
+  drops the relative cut.
+- The meaning of `T`/`L` in the set names is inferred from the "Tight PTCUT" comments in
+  `fortran/gg2aa`. It is not documented in the 2018 files.
+- A template config lists its fit inputs under `fit_inputs`. The templates to compute are
+  collected from their `files_sig` and `files_template`, so the two sides cannot drift apart.
+- `tests/test_yaml.py` checks that every fit input belongs to exactly one template config, with the
+  same directory and $\sqrt s$, and that all its templates are covered.
+
 ### Generate templates
 
 ```bash
 docker run --rm -v "$PWD:/work" pytmdp:dev \
-    python3 scripts/make_templates.py config/templates_LHC13T.yml -j 16
+    python3 scripts/make_templates.py yaml/templates/LHC13T.yml -j 16
 ```
+
+`--check` lists the templates of a set and checks the config without running anything.
 
 - Templates are written to the `outdir` of the config (for example `Template/LHC13T/`), together
   with a `manifest.json` that records the configuration and the git commit.
 - Existing files are skipped unless you pass `--force`.
 - One production template (1001 points, VEGAS 50 000 calls × 6 iterations) is estimated to take about 80 min on
-  one core (scaled from a timed low-statistics run). `config/templates_LHC13T.yml` has 33 masses, i.e. about 2.5 h on 16–20 cores.
+  one core (scaled from a timed low-statistics run). For example, `LHC13T` (50 templates) takes
+  about 3.5 h on 20 cores, and `FCC100` (379 templates) about 25 h.
 
-Config keys (all optional except `outdir`, `masses`, `widths`; defaults are those of
-`MKD_gg2aa.f`):
+Template-config keys (`outdir` is required, plus `fit_inputs` and/or `masses` × `widths`; the
+defaults are those of `MKD_gg2aa.f`):
 
 | Key | Meaning | Default |
 |---|---|---|
 | `rs` | $\sqrt s$ [GeV] | 100000 |
 | `pdfset` | LHAPDF set (must be installed in the image) | `CT14lo` |
-| `masses`, `widths` | list, or `{start, stop, step}` [GeV] | — |
+| `outdir` | output directory; must equal the `dir` of every fit input | — |
+| `fit_inputs` | fit inputs whose `files_sig` + `files_template` are computed | — |
+| `masses`, `widths` | additional grid: list, or `{start, stop, step}` [GeV] | — |
 | `mu_green` | scale of $\alpha_s$ in the Green function [GeV] | 40 |
-| `etamax`, `ptmin` | photon cuts; in addition $p_T>0.4\,m_{\gamma\gamma}$ is hard-coded | 2.5, 40 |
+| `etamax`, `ptmin` | photon $\lvert\eta\rvert$ and $p_T$ cuts | 2.5, 40 |
+| `ptratio` | relative cut $p_T>{\rm ptratio}\cdot m_{\gamma\gamma}$; 0 = loose | 0.4 |
 | `maa_min`, `maa_max`, `maa_step` | $m_{\gamma\gamma}$ grid [GeV]. `TMDP.py` requires 300, 400, 0.1 | 300, 400, 0.1 |
 | `ncall`, `itmx` | VEGAS calls per point and iterations | 50000, 6 |
 
@@ -113,10 +142,13 @@ LO running of $\alpha_s$, and an NLO Coulomb potential in the Green function.
 Put the background files in the template directory, then run:
 
 ```bash
-docker run --rm -v "$PWD:/work" pytmdp:dev python3 ScanMass.py input_LHC13T.yml 1000
+docker run --rm -v "$PWD:/work" pytmdp:dev python3 ScanMass.py yaml/fit/input_LHC13T.yml 1000
 ```
 
-Fit inputs (`input_*.yml`, as read by `TMDP.set_init`):
+`ScanWidth.py` and `Scan2D.py` take `yaml/fit/inputWidth_*.yml` and `yaml/fit/input2D_*.yml`. Paths
+in the fit inputs (`dir`) are relative to the repository root, so run the scans from there.
+
+Fit-input keys (`yaml/fit/*.yml`, as read by `TMDP.set_init`):
 
 | Key | Meaning |
 |---|---|

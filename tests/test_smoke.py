@@ -1,6 +1,6 @@
 """End-to-end smoke test: Fortran template generator -> TMDP fit.
 
-Uses the low-statistics templates of config/templates_test.yml (generated
+Uses the low-statistics templates of yaml/templates/test.yml (generated
 on first use, ~1 min) and *synthetic* exponential backgrounds.  It checks
 that the chain runs, not that the physics is right.
 
@@ -26,7 +26,7 @@ def templates():
                for n in names):
         subprocess.run([sys.executable,
                         os.path.join(ROOT_DIR, 'scripts', 'make_templates.py'),
-                        os.path.join(ROOT_DIR, 'config', 'templates_test.yml')],
+                        os.path.join(ROOT_DIR, 'yaml', 'templates', 'test.yml')],
                        check=True)
     return names
 
