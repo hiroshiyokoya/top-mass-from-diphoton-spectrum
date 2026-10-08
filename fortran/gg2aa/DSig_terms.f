@@ -1,0 +1,353 @@
+      PROGRAM MAIN
+      IMPLICIT NONE
+      INTEGER I,J,K,L
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,MAA,MAA0,ETMAX,PTMIN
+      COMMON /SIGAA/   MT,GT,MU,ASG,RS,MAA,MAA0,ETMAX,PTMIN
+      DOUBLE PRECISION ALP,ASR,MUR
+      DOUBLE COMPLEX INT2
+      EXTERNAL       INT2
+      DOUBLE PRECISION S1,S2,S3,S4
+      COMMON /RESULT/  S1,S2,S3,S4
+      DOUBLE PRECISION CAA,F(-2:2),H,HH,DSIG(8),DS,SIG
+      INCLUDE 'parameter.inc'
+      INCLUDE 'qcdparam.inc'
+      INCLUDE 'qcdfunc.inc'
+      INTEGER ID,IT(4)
+      DATA IT / -2,-1,1,2 /
+      COMMON /TERM/ J
+C.....
+      ALP = 1D0/128D0
+      NQCD = 1
+      CALL QCDLIBS
+C.....
+      RS = 13D3
+c     RS = 100D3
+      MT = 173D0
+      GT = 1.5D0                !1.498D0
+      DO 200 L = 1,4
+         MT = 173D0 + 0.1D0*IT(L)
+C     MU = 20D0 * 2D0**(L-1)
+      MU = 40D0
+      ASG = ASQCD(MU)
+      ETMAX = 2.5D0
+      PTMIN =  40D0
+C...  LHAPDF Initialization
+c      CALL INITPDFSETBYNAME ('CT14nlo')
+      CALL INITPDFSETBYNAME ('CT14lo')
+c      CALL INITPDFSETBYNAME ('NNPDF30_lo_as_0118')
+c      CALL INITPDFSETBYNAME ('MMHT2014lo68cl')
+C.....
+      H  = 0.1D0
+      HH = 0.1D0
+C.....
+      DO 100 I = 1, INT(8D0/H) + 1
+         MAA0 = 340D0 + H*(I-1)
+         MUR  = MAA0
+         ASR  = ASQCD (MUR)
+         CAA  = ALP**2*ASR**2 / (64D0*PI*RS**2) / MAA0 * 389429.57D6 ! [fb/GeV]
+         DO J = 1,8
+            IF ( J.EQ.1 .OR. J.EQ.4 .OR. J.EQ.7 .OR. J.EQ.8 ) THEN
+               MAA = MAA0
+               CALL VEGAS (INT2,1D-4,2,200 000,10,0,0)
+               DSIG(J) = S1 * CAA
+               IF  ( J.EQ.1 ) SIG = -DSIG(1)
+            ELSE
+               DO K = 1,4
+                  ID = IT(K)
+                  MAA = MAA0 + ID*HH
+c                  CALL VEGAS (INT2,1D-5,2,400 000,10,0,0)
+                  F(ID) = S1 * CAA
+               ENDDO
+               DSIG(J) = ( F(-2) - 8D0*F(-1) + 8D0*F(1) - F(2) ) / (12D0*HH)
+            ENDIF
+         ENDDO
+C.....
+         DS = 0D0
+         DO J = 1,8
+            DS = DS + DSIG(J)
+         ENDDO
+         WRITE ( 6,    '(F6.2,1X,9(1PE12.4)))') MAA0,DS/SIG,DSIG/SIG
+         WRITE (10*L+1,'(F6.2,1X,4(1PE12.4)))') MAA0,DS/SIG,
+     -        (DSIG(1)+DSIG(2)+DSIG(3)+DSIG(5)+DSIG(6))/SIG,
+     -        DSIG(4)/SIG,(DSIG(7)+DSIG(8))/SIG
+         WRITE (10*L+2,'(F6.2,1X,9(1PE12.4)))') MAA0,DS/SIG,DSIG/SIG
+         WRITE (10*L+3,'(F6.2,1X,8(1PE12.4)))') MAA0,DSIG
+         WRITE (10*L+4,'(F6.2,1X,2(1PE12.4)))') MAA0,DS/MAA0,DS
+C.....
+ 100  CONTINUE
+ 200  CONTINUE
+C.....
+      STOP
+      END
+      
+      DOUBLE PRECISION FUNCTION INT2 (X)
+      IMPLICIT NONE
+      DOUBLE PRECISION X(2)
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,MAA,MAA0,ETMAX,PTMIN
+      COMMON /SIGAA/   MT,GT,MU,ASG,RS,MAA,MAA0,ETMAX,PTMIN
+      DOUBLE PRECISION ET1,ET1MAX,ET1MIN,ET1JAC
+      DOUBLE PRECISION ET2,ET2MAX,ET2MIN,ET2JAC
+      DOUBLE PRECISION YMAX,YMIN,YJAC
+      DOUBLE PRECISION CMAX,CMIN,CJAC
+      DOUBLE PRECISION R,TAU,Y,ETHAT,COS,PTA
+      DOUBLE PRECISION X1,X2,MUF
+      DOUBLE COMPLEX   GG2AAQ,GG2AAG
+      EXTERNAL         GG2AAQ,GG2AAG
+      DOUBLE COMPLEX   AMP,AMPQ,AMPG
+      DOUBLE COMPLEX   AMP1,AMP2,AQ,AG,BG,DBG
+      DOUBLE PRECISION SAMP(5)
+      DOUBLE PRECISION JAC
+      DOUBLE PRECISION Q2Q,Q2T
+      PARAMETER ( Q2Q = 1.22222222D0, Q2T = 0.4444444444D0 )
+      DOUBLE PRECISION ONE,TWO,FOUR,HALF, PI
+      PARAMETER ( ONE = 1D0, TWO = 2D0, FOUR = 4D0, HALF = 0.5D0 )
+      PARAMETER ( PI = 3.141592654D0 )
+      INTEGER I,J,K,L1234L(4,16),IHEL(5)
+      DATA IHEL/1,2,4,6,7/
+      DATA (L1234L(I, 1),I=1,4) / 1, 1, 1, 1/
+      DATA (L1234L(I, 2),I=1,4) / 1, 1, 1,-1/
+      DATA (L1234L(I, 3),I=1,4) / 1, 1,-1, 1/
+      DATA (L1234L(I, 4),I=1,4) / 1, 1,-1,-1/
+      DATA (L1234L(I, 5),I=1,4) / 1,-1, 1, 1/
+      DATA (L1234L(I, 6),I=1,4) / 1,-1, 1,-1/
+      DATA (L1234L(I, 7),I=1,4) / 1,-1,-1, 1/
+      DATA (L1234L(I, 8),I=1,4) / 1,-1,-1,-1/
+      DATA (L1234L(I, 9),I=1,4) /-1, 1, 1, 1/
+      DATA (L1234L(I,10),I=1,4) /-1, 1, 1,-1/
+      DATA (L1234L(I,11),I=1,4) /-1, 1,-1, 1/
+      DATA (L1234L(I,12),I=1,4) /-1, 1,-1,-1/
+      DATA (L1234L(I,13),I=1,4) /-1,-1, 1, 1/
+      DATA (L1234L(I,14),I=1,4) /-1,-1, 1,-1/
+      DATA (L1234L(I,15),I=1,4) /-1,-1,-1, 1/
+      DATA (L1234L(I,16),I=1,4) /-1,-1,-1,-1/
+      COMMON /HEL/ L1234L,IHEL
+      COMMON /TERM/ J
+C.....
+      DOUBLE PRECISION PDF1(-6:6), PDF2(-6:6)
+      EXTERNAL EVOLVEPDF
+C.....
+      R   = MAA/RS
+      TAU = R**2
+C...  Integrate over Eta1 and Eta2
+      ET1MAX =  ETMAX
+      ET1MIN = -ET1MAX
+      ET1JAC = ET1MAX - ET1MIN
+      ET1    = ET1JAC * X(1) + ET1MIN
+      ET2MAX = MIN(-ET1 - DLOG(TAU), ETMAX)
+      ET2MIN = MAX(-ET1 + DLOG(TAU),-ETMAX)
+      ET2JAC = ET2MAX - ET2MIN
+      ET2    = ET2JAC * X(2) + ET2MIN
+      Y      = (ET1 + ET2) * HALF
+      ETHAT  = (ET1 - ET2) * HALF
+      COS    = DTANH(ETHAT)
+      JAC    = HALF * ET1JAC * ET2JAC / DCOSH(ETHAT)**2
+C...  Kinematical Cuts
+      PTA = MAA*DSQRT(ONE-COS**2) * HALF
+      IF ( DABS(ET1).GT.ETMAX ) RETURN
+      IF ( DABS(ET2).GT.ETMAX ) RETURN
+      IF ( PTA.LT.PTMIN ) RETURN
+c      IF ( PTA.LT.0.4*MAA ) RETURN ! Tight PTCUT
+C...  Gluon Distribution Function
+      MUF = MAA
+      X1  = R * DEXP( Y)
+      X2  = R * DEXP(-Y)
+      CALL EVOLVEPDF (X1,MUF,PDF1)
+      CALL EVOLVEPDF (X2,MUF,PDF2)
+C---- Matrix Elements Square ----
+      DO I = 1,5
+         SAMP(I) = 0D0
+         K = IHEL(I)
+         AQ  = GG2AAQ (MAA,COS,L1234L(1,K))
+         CALL GG2AAGD (MT,GT,MU,ASG,MAA0,COS,AG, BG,L1234L(1,K))
+         CALL GG2AAG5 (MT,GT,MU,ASG,MAA0,COS,AG,DBG,I)
+         IF ( J.EQ.1 ) THEN
+            AMP1 = Q2Q*AQ + Q2T*AG + Q2T*BG
+            SAMP(I) = - DBLE(AMP1*DCONJG(AMP1))
+         ELSEIF ( J.EQ.2 ) THEN
+            AMP1 = Q2Q*AQ + Q2T*AG
+            SAMP(I) = DBLE(AMP1*DCONJG(AMP1)) * MAA0
+         ELSEIF ( J.EQ.3 ) THEN
+            AMP1 = Q2Q*AQ + Q2T*AG
+            AMP2 = Q2T*BG
+            SAMP(I) = 2D0*DBLE(AMP1*DCONJG(AMP2)) * MAA0
+         ELSEIF ( J.EQ.4 ) THEN
+            AMP1 = Q2Q*AQ + Q2T*AG
+            AMP2 = Q2T*DBG
+            SAMP(I) = 2D0*DBLE(AMP1*DCONJG(AMP2)) * MAA0
+         ELSEIF ( J.EQ.5 ) THEN
+            SAMP(I) =  DBLE(Q2T*BG)**2 * MAA0
+         ELSEIF ( J.EQ.6 ) THEN
+            SAMP(I) = DIMAG(Q2T*BG)**2 * MAA0
+         ELSEIF ( J.EQ.7 ) THEN
+            AMP1 = Q2T* BG
+            AMP2 = Q2T*DBG
+            SAMP(I) = 2D0*DBLE(AMP1)*DBLE(AMP2) * MAA0
+         ELSEIF ( J.EQ.8 ) THEN
+            AMP1 = Q2T* BG
+            AMP2 = Q2T*DBG
+            SAMP(I) = 2D0*DIMAG(AMP1)*DIMAG(AMP2) * MAA0
+         ENDIF
+      ENDDO
+C...  Hadronic Cross Section
+      INT2 = 2D0*SAMP(1) + 8D0*SAMP(2) + 2D0*SAMP(3)
+     -     + 2D0*SAMP(4) + 2D0*SAMP(5)
+      INT2 = INT2 * JAC * PDF1(0) / X1 * PDF2(0) / X2 ! dSigma / dTau [fb]
+C.....
+      CALL XHFILL (1,X(1),INT2)
+      CALL XHFILL (2,X(2),INT2)
+      CALL XHFILL (3,ET1 ,INT2)
+      CALL XHFILL (4,ET2 ,INT2)
+C.....
+      RETURN
+      END
+
+      SUBROUTINE GG2AAG5 (MT,GT,MU,ASG,RS,COS,AG,DBG,I)
+      IMPLICIT NONE
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,COS
+      DOUBLE COMPLEX AG,DBG
+      INTEGER I,J,K,KK
+      DOUBLE PRECISION E0,E,H
+      DOUBLE PRECISION RS2M,RS1M,RS1P,RS2P
+      DATA H /0.01D0/
+      DOUBLE COMPLEX DBG0(5),BGH(-2:2)
+      COMMON /DGRN/E0,DBG0
+      DATA E0 /12345.67890D0/
+      INTEGER L1234L(4,16),IHEL(5)
+      COMMON /HEL/ L1234L,IHEL
+      E = RS - 2D0*MT
+      IF ( E.NE.E0 ) THEN
+         RS2M = RS - 2D0*H
+         RS1M = RS - 1D0*H
+         RS1P = RS + 1D0*H
+         RS2P = RS + 2D0*H
+         DO K = 1,5
+            KK = IHEL(K)
+            CALL GG2AAGD (MT,GT,MU,ASG,RS2M,COS,AG,BGH(-2),L1234L(1,KK))
+            CALL GG2AAGD (MT,GT,MU,ASG,RS1M,COS,AG,BGH(-1),L1234L(1,KK))
+            CALL GG2AAGD (MT,GT,MU,ASG,RS1P,COS,AG,BGH( 1),L1234L(1,KK))
+            CALL GG2AAGD (MT,GT,MU,ASG,RS2P,COS,AG,BGH( 2),L1234L(1,KK))
+            DBG0(K) = ( BGH(-2) - 8D0*BGH(-1) + 8D0*BGH(1) - BGH(2) )
+     -           / (12D0*H)
+         ENDDO
+         E0 = E
+      ENDIF
+      DBG = DBG0(I)
+      RETURN
+      END
+      
+C     J=0: 0, 1: A + B*G_0, 2: A + B*G, 3: B*(G-G_0)
+      SUBROUTINE GG2AAGD (MT,GT,MU,ASG,RS,COS,AG,BG,L1234)
+      IMPLICIT NONE
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,RSD,COS
+      DOUBLE COMPLEX AG,BG
+      INTEGER L1234(4)
+      DOUBLE PRECISION ONE,TWO,FOUR,HALF
+      DOUBLE PRECISION PI,EPS
+      DOUBLE COMPLEX IMAG
+      PARAMETER ( ONE = 1D0, TWO = 2D0, FOUR = 4D0, HALF = 0.5D0 )
+      PARAMETER ( PI = 3.141592654D0, EPS = 1D-12 )
+      PARAMETER ( IMAG = DCMPLX(0D0,1D0) )
+      INTEGER I
+      DOUBLE PRECISION E,E0,R,ED,ED0,RD
+      DOUBLE COMPLEX GRN
+      COMMON /GRND/E0,GRN
+      DATA E0 /12345.67890D0/
+      DOUBLE COMPLEX   MTPPPP,MTMPPP,MTMMPP,MTMPPM
+      DOUBLE PRECISION ATPPPP,ATMPPP,ATMMPP,ATMPPM
+      DOUBLE PRECISION A0PPPP,A2PPPP,A4PPPP,A0MMPP,A2MMPP,A4MMPP
+      DOUBLE PRECISION A2MPPP,A4MPPP,A2MPPM,A3MPPM,A4MPPM
+      DOUBLE PRECISION BPPPP,BMMPP
+      DOUBLE PRECISION D200,D400,D220,D420,D222,D322,D422
+      DOUBLE PRECISION REG,IMG,REG0,IMG0
+      PARAMETER ( A0PPPP=-1.0663565D0, A2PPPP=-4.97776D-3,A4PPPP=-5.3889D-5 )
+      PARAMETER ( A0MMPP= 1.5738019D0, A2MMPP= 2.13711D-3,A4MMPP= 1.6898D-5 )
+      PARAMETER ( A2MPPP=-2.90941D-3,A4MPPP=-1.0420D-5                   )
+      PARAMETER ( A2MPPM= 1.1920027D-1,A3MPPM=-6.0737D-4,A4MPPM= 2.9467D-4 )
+      INCLUDE 'qcdfunc.inc'
+      D200 (COS) = HALF*(3D0*COS**2-ONE)
+      D400 (COS) = (35D0*COS**4-30D0*COS**2+3D0)/8D0
+      D220 (COS) = DSQRT(3D0/8D0)*(ONE-COS**2)
+      D420 (COS) = DSQRT(5D0/32D0)*(ONE-COS**2)*(7D0*COS**2-ONE)
+      D222 (COS) = (HALF*(ONE+COS))**2
+      D322 (COS) = (HALF*(ONE+COS))**2*(3D0*COS-TWO)
+      D422 (COS) = (HALF*(ONE+COS))**2*(7D0*COS**2-7D0*COS+ONE)
+      ATPPPP (COS) = A0PPPP + 5D0*A2PPPP*D200(COS) + 9D0*A4PPPP*D400(COS)
+      ATMPPP (COS) = 5D0*A2MPPP*D220(COS) + 9D0*A4MPPP*D420(COS)
+      ATMMPP (COS) = A0MMPP + 5D0*A2MMPP*D200(COS) + 9D0*A4MMPP*D400(COS)
+      ATMPPM (COS) = 5D0*A2MPPM*D222(COS) + 7D0*A3MPPM*D322(COS)
+     -     + 9D0*A4MPPM*D422(COS)
+      BPPPP = -4D0*PI**2/MT**2
+      BMMPP =  4D0*PI**2/MT**2
+      R  = RS**2/(4D0*MT**2)
+      E  = RS - 2D0*MT
+      RD = RSD**2/(4D0*MT**2)
+      ED = RSD - 2D0*MT
+      IF ( E.NE.E0 ) THEN
+         CALL GRNNLOMSB (E ,MT,GT,ASG,MU,MU, 1,REG,IMG)
+         GRN = DCMPLX(REG,IMG)
+         E0 = E
+      ENDIF
+C.....
+      IF     ( ABS(L1234(1)+L1234(2)+L1234(3)+L1234(4)).EQ.4 ) THEN
+         AG = ATPPPP ( COS)
+         BG = BPPPP * GRN
+      ELSEIF ( ABS(L1234(1)+L1234(2)+L1234(3)+L1234(4)).EQ.2 ) THEN
+         AG = ATMPPP ( COS)
+         BG = DCMPLX(0D0,0D0)
+      ELSEIF ( ABS(L1234(1)+L1234(2)-L1234(3)-L1234(4)).EQ.4 ) THEN
+         AG = ATMMPP ( COS)
+         BG = BMMPP * GRN
+      ELSEIF ( ABS(L1234(1)-L1234(2)-L1234(3)+L1234(4)).EQ.4 ) THEN
+         AG = ATMPPM ( COS)
+         BG = DCMPLX(0D0,0D0)
+      ELSEIF ( ABS(L1234(1)-L1234(2)+L1234(3)-L1234(4)).EQ.4 ) THEN
+         AG = ATMPPM (-COS)
+         BG = DCMPLX(0D0,0D0)
+      ELSE
+         STOP
+      ENDIF
+C.....
+      RETURN
+      END
+
+      SUBROUTINE USERIN
+      IMPLICIT NONE
+      INCLUDE 'parameter.inc'
+      INTEGER MAXDIM
+      PARAMETER (MAXDIM=100)
+      DOUBLE PRECISION XL(MAXDIM),XU(MAXDIM)
+      INTEGER IG(MAXDIM)
+      INTEGER NCALL, ITMX1, ITMX2
+      DOUBLE PRECISION ACC1, ACC2
+      INTEGER IDIM
+C.....
+      DOUBLE PRECISION MT,GT,MU,ASG,RS,MAA,MAAD,ETMAX,PTMIN
+      COMMON /SIGAA/   MT,GT,MU,ASG,RS,MAA,MAAD,ETMAX,PTMIN
+C
+      NDIM  = 2
+      NWILD = 2
+C
+      DO IDIM = 1, NDIM
+         XL(IDIM) = 0D0
+         XU(IDIM) = 1D0
+         IG(IDIM) = 1
+      ENDDO
+C
+      CALL BSSETD (NDIM,NWILD,XL,XU,IG)
+C
+      NCALL = 10 000
+      ITMX1 = 6
+      ITMX2 = 6
+      ACC1  = 0.1D0
+      ACC2  = 0.1D0
+C
+      CALL BSSETP (NCALL,ITMX1,ITMX2,ACC1,ACC2)
+      CALL XHINIT (1, 0D0,1D0,50,'D SIGMA / D X(1)')
+      CALL XHINIT (2, 0D0,1D0,50,'D SIGMA / D X(2)')
+      CALL XHINIT (3,-ETMAX,ETMAX,50,'D SIGMA / D Et1')
+      CALL XHINIT (4,-ETMAX,ETMAX,50,'D SIGMA / D Et2')
+C
+      RETURN
+      END
+C
+

@@ -1,0 +1,83 @@
+FC	= gfortran
+FFLAGS	= -O3 -w -ffixed-line-length-132 -I$(INC)
+LD	= gfortran
+
+LHAPDF		= -L/Users/yokoya/Work/MG5_aMC_v2_5_2/HEPTools/lhapdf6/lib -lLHAPDF
+LIBS_DIR	= -L$(HOME)/lib
+LIBS		= -lbases50 -lchaplin -lQCD $(LHAPDF) $(LIBS_DIR)
+
+INC	= $(HOME)/include/QCD/
+
+VEGAS	= intvegas.o
+BASES   = 
+GG2AA	= gg2aaQ.o gg2aaT.o gg2aaG.o gg2aaA.o GrnMSBLO.o GrnMSBNLO.o
+HPL	= hplog.o ddilog.o
+
+OBJS	= $(GG2AA) #$(HPL)
+
+.f.o:
+	$(FC) $(FFLAGS) -c $<
+
+
+all:	Amp_gg2aa.exe Argand_gg2aa.exe MKD_gg2aa.exe \
+	Sig_gg2aa.exe Sig_qqb2aa.exe Sig_tot.exe
+
+Amp_gg2aa.exe:		Amp_gg2aa.o $(OBJS) $(VEGAS)
+	$(LD) $(FFLAGS) Amp_gg2aa.o $(OBJS) $(VEGAS) $(LIBS) \
+	-o Amp_gg2aa.exe
+
+Argand_gg2aa.exe:	Argand_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) Argand_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o Argand_gg2aa.exe
+
+Pwd_gg2aa.exe:		Pwd_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) Pwd_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o Pwd_gg2aa.exe
+
+Sig_gg2aa.exe:		Sig_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) Sig_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o Sig_gg2aa.exe
+
+HatSig_gg2aa.exe:	HatSig_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) HatSig_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o HatSig_gg2aa.exe
+
+Sig_qqb2aa.exe:		Sig_qqb2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) Sig_qqb2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o Sig_qqb2aa.exe
+
+Sig_tot.exe:		Sig_tot.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) Sig_tot.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o Sig_tot.exe
+
+MKD_gg2aa.exe:		MKD_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) MKD_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o MKD_gg2aa.exe
+
+Scl_gg2aa.exe:		Scl_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) Scl_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o Scl_gg2aa.exe
+
+DSig_gg2aa.exe:		DSig_gg2aa.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) DSig_gg2aa.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o DSig_gg2aa.exe
+
+DSig_gg2aa0.exe:	DSig_gg2aa0.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) DSig_gg2aa0.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o DSig_gg2aa0.exe
+
+DSig_terms.exe:		DSig_terms.o $(OBJS) $(VEGAS) $(BASES)
+	$(LD) $(FFLAGS) DSig_terms.o $(OBJS) $(VEGAS) $(BASES) $(LIBS) \
+	-o DSig_terms.exe
+
+PlotGrnMS.exe:		PlotGrnMS.o $(OBJS) $(VEGAS)
+	$(LD) $(FFLAGS) PlotGrnMS.o $(OBJS) $(VEGAS) $(LIBS) \
+	-o PlotGrnMS.exe
+
+DGrnMS.exe:		DGrnMS.o $(OBJS) $(VEGAS)
+	$(LD) $(FFLAGS) DGrnMS.o $(OBJS) $(VEGAS) $(LIBS) \
+	-o DGrnMS.exe
+
+clean:; @rm -vf *.o *.exe
+
+.SUFFIXES: .a .o .f

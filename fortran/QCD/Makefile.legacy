@@ -1,0 +1,34 @@
+COUP	= QCDlibs.o
+PEGASUS	= asrgkt_pegasus.o betafct_pegasus.o
+
+OBJS	= $(COUP) $(PEGASUS)
+INC	= qcdparam.inc qcdfunc.inc
+
+FC            = gfortran
+#INCLUDES      = -I. -I/home/yokoya/Tools/BASES/bases50
+FFLAGS        = -O2 -w -ffixed-line-length-132
+LD	      = gfortran
+
+INCLUDE      = -I$(HOME)/include/
+
+LIBS_DIR	= -L/home/yokoya/lib
+LIBS		= $(LHAPDF) $(LIBS_DIR)
+
+.f.o:
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
+
+all:	lib
+lib:	libQCD.a
+
+libQCD.a:	$(OBJS)
+	@chmod 644 ../lib/*;
+	ar cr libQCD.a $(OBJS)
+	ranlib libQCD.a;
+	mv libQCD.a ../lib;
+	cp qcdfunc.inc qcdparam.inc ../lib;
+	@chmod 444 ../lib/*;
+#	@rm *.o
+
+clean:; @rm -vf *.o
+
+.SUFFIXES: .a .o .f
