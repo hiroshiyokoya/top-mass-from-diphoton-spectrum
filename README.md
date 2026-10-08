@@ -235,10 +235,16 @@ current milestone.
 See [docs/REVIEW.md](docs/REVIEW.md) for the full list and proposed fixes. Fixes are made after
 review, in separate issues and PRs. Progress is tracked in issue #7.
 
-## Third-party code
+## Licence
 
-`fortran/` ships HPLOG, DDILOG, QCD-PEGASUS, a VEGAS variant and the CHAPLIN interface header,
-unchanged. See [THIRD_PARTY.md](THIRD_PARTY.md). Their licences have not been checked yet.
+[MIT](LICENSE), © 2016–2026 Hiroshi Yokoya. You may use, modify and redistribute the code freely,
+as long as the copyright notice and the licence text are kept. If you use it in a publication,
+please cite arXiv:1607.00990.
+
+The MIT licence does not cover the third-party code in `fortran/`: HPLOG, DDILOG, QCD-PEGASUS, a
+VEGAS variant and the CHAPLIN interface header. These are shipped unchanged and remain under the
+terms of their authors; see [THIRD_PARTY.md](THIRD_PARTY.md). Their licences have not been checked
+yet.
 
 ## Author
 

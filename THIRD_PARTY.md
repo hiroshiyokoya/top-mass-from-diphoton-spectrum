@@ -3,7 +3,8 @@
 `fortran/` contains code written by others, shipped unchanged because the
 gg2aa programs were built with it in 2016. Their licences have **not** been
 checked yet; please consult the original sources before reusing them outside
-this repository.
+this repository. They are not covered by the MIT licence of this repository
+(`LICENSE`).
 
 | File | Origin | Reference | Licence |
 |---|---|---|---|
