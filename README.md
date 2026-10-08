@@ -31,9 +31,8 @@ The repository has two parts:
 > - The **signal of arXiv:1607.00990 is reproduced**: all 19 curves of its Figs. 1 and 4 agree
 >   with this repository to within 0.31% (see
 >   [Reproducing arXiv:1607.00990](#reproducing-arxiv160700990)).
-> - The fit part has known problems that are documented and not yet fixed
->   ([docs/REVIEW.md](docs/REVIEW.md)). Most importantly, with current ROOT the pseudo-data are
->   silently empty (P1).
+> - The fit part works with current ROOT. P1, P3, P4 and P6 of [docs/REVIEW.md](docs/REVIEW.md)
+>   are fixed; the remaining items there are open.
 
 ## Repository layout
 
@@ -45,7 +44,7 @@ The repository has two parts:
 | `fortran/lib/include/`, `fortran/lib/bases_stub.f` | shared include file; no-op BASES routines |
 | `fortran/extern/` | third-party code (VEGAS, QCD-PEGASUS, HPLOG, DDILOG, CHAPLIN header); see [THIRD_PARTY.md](THIRD_PARTY.md) |
 | `fortran/src/mktemplate.f` | current driver: $d\sigma/dm_{\gamma\gamma}$ for one $(m_t,\Gamma_t)$, parameters via namelist |
-| `fortran/legacy/` | the 2016 drivers of arXiv:1607.00990 (`MKD_gg2aa.f`, `Sig_gg2aa.f`, …), kept unchanged |
+| `fortran/legacy/` | the 2016 drivers of arXiv:1607.00990 (`MKD_gg2aa.f`, `Sig_gg2aa.f`, …), kept as they were apart from the P3 fix |
 | `fortran/Makefile` | `make -C fortran` builds `mktemplate`; `make -C fortran legacy` builds the 2016 drivers |
 | `scripts/make_templates.py` | runs `mktemplate` over a $(m_t,\Gamma_t)$ grid in parallel |
 | `scripts/reproduce_1607_00990.py` | computes all curves of Figs. 1 and 4 of the paper and compares them with `reference/` |
@@ -171,13 +170,14 @@ one grid step (0.1 GeV for Fig. 1, 0.25 GeV for Fig. 4). The full table and the 
 ## The 2016 drivers (`fortran/legacy/`)
 
 These are the programs used for arXiv:1607.00990: `MKD_gg2aa.f` (templates), `Sig_gg2aa.f`,
-`DSig_*.f`, `Scl_gg2aa.f`, `Argand_gg2aa.f`, and others. They are kept unchanged for reference, and
+`DSig_*.f`, `Scl_gg2aa.f`, `Argand_gg2aa.f`, and others. They are kept for reference, and
 `make -C fortran legacy` builds the seven that do not need BASES.
 
-Their integrands return an undefined value for phase-space points rejected by the cuts. Depending on
-the compiler, the result changes by up to a factor of 2 ([REVIEW](docs/REVIEW.md) P3).
-`mktemplate.f` fixes this (`LEGACYCUT=0`) and can reproduce the old behaviour exactly
-(`LEGACYCUT=1`). The paper's figures correspond to the fixed behaviour.
+As written in 2016, their integrands returned an undefined value for phase-space points rejected by
+the cuts. Depending on the compiler, the result changed by up to a factor of 2
+([REVIEW](docs/REVIEW.md) P3). This is fixed by one line in each integrand (`INT2 = 0D0`); nothing
+else in these files is changed. The old behaviour can be reproduced exactly with `mktemplate`
+(`LEGACYCUT=1`), and the paper's figures correspond to the fixed behaviour.
 
 ## Mass fit (`fit/`)
 
