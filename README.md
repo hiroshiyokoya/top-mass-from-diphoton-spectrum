@@ -20,14 +20,17 @@ effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
   [arXiv:1911.09314](https://arxiv.org/abs/1911.09314), JHEP 04 (2020) 115. This is the NLO
   follow-up and is not implemented here.
 
-> **Status (2026-10).** The 2018 Python code runs with Python 3.12 / ROOT 6.34 in the Docker image,
-> but has known problems that are documented and not yet fixed (see [docs/REVIEW.md](docs/REVIEW.md)):
+> **Status (2026-10).**
 >
-> - **P1** With current ROOT, `TH1::FillRandom` silently produces *empty* pseudo-data in
->   `TMDP.genEvents`, so fits run on empty histograms.
-> - **P3** The legacy Fortran integrands return an undefined value outside the cuts. Depending
+> - The **signal of arXiv:1607.00990 is reproduced**: all curves of its Figs. 1 and 4 agree with
+>   this repository to within 1% (see [Reproducing arXiv:1607.00990](#reproducing-arxiv160700990)).
+> - The 2018 Python code runs with Python 3.12 / ROOT 6.34 in the Docker image, but has known
+>   problems that are documented and not yet fixed (see [docs/REVIEW.md](docs/REVIEW.md)). The most
+>   important one is **P1**: with current ROOT, `TH1::FillRandom` silently produces *empty*
+>   pseudo-data in `TMDP.genEvents`, so fits run on empty histograms.
+> - The legacy Fortran integrands return an undefined value outside the cuts (**P3**). Depending
 >   on the compiler optimisation, $d\sigma/dm_{\gamma\gamma}$ changes by a factor of about 2.
->   `fortran/src/mktemplate.f`, which generates the templates, is fixed.
+>   `fortran/src/mktemplate.f` is fixed, and the paper's figures are not affected.
 
 ## How it works
 
@@ -53,15 +56,19 @@ effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
 | `TMDP.py` | Classes `TMDP` (inputs, pseudo-data, fit functions) and `GG2AA` (one template) |
 | `ScanMass.py`, `ScanWidth.py`, `Scan2D.py` | Scans in $m_t$, in $\Gamma_t$, and in $(m_t,\Gamma_t)$ |
 | `yaml/fit/` | Fit inputs (2018): LHC 13 TeV, HE-LHC 27 TeV and FCC 100 TeV; mass, width and 2D scans |
-| `yaml/templates/` | Template-set configs, one per template directory, plus a quick test set |
-| `fortran/gg2aa/` | 2016 Fortran of arXiv:1607.00990 (amplitudes, Green functions, drivers), unchanged |
+| `yaml/templates/` | Template-set configs: one per 2018 template directory, the paper's setup (`paper1607_*`), and a quick test set |
+| `yaml/repro/1607.00990.yml` | Setup and curves for reproducing the paper's figures |
+| `reference/1607.00990/` | Curves extracted from the paper's vector figures (CSV) |
+| `fortran/gg2aa/` | 2016 Fortran of arXiv:1607.00990 (amplitudes, Green functions, drivers). Unchanged except that the order of the Green-function potential in `gg2aaG.f` can be set (default NLO, as before) |
 | `fortran/QCD/` | libQCD: running $\alpha_s$ (QCD-PEGASUS), unchanged |
 | `fortran/src/mktemplate.f` | Template generator, one $(m_t,\Gamma_t)$ per run, parameters via namelist |
 | `fortran/stubs/` | No-op BASES routines (BASES is not needed for the VEGAS-based programs) |
 | `fortran/Makefile` | Linux build (the original macOS makefiles are kept as `*/Makefile.legacy`) |
 | `scripts/make_templates.py` | Runs `mktemplate.exe` over a $(m_t,\Gamma_t)$ grid in parallel |
+| `scripts/reproduce_1607_00990.py` | Computes all curves of Figs. 1 and 4 of the paper and compares them with `reference/` |
+| `scripts/tools/digitize_1607_00990.py` | Extracts the curves from the figure PDFs of the arXiv source |
 | `docker/Dockerfile` | Toolchain image: ROOT 6.34, gfortran, LHAPDF 6.5.5 + CT14 sets, CHAPLIN 1.2 |
-| `tests/` | End-to-end smoke test (Fortran → templates → fit) and yaml consistency checks |
+| `tests/` | End-to-end smoke test (Fortran → templates → fit), yaml consistency, spot checks against the paper |
 | `docs/REVIEW.md` | Code review (2026-10) and proposed fixes |
 | `THIRD_PARTY.md` | Third-party Fortran shipped in `fortran/` |
 
@@ -164,6 +171,57 @@ Fit-input keys (`yaml/fit/*.yml`, as read by `TMDP.set_init`):
 
 The units of `sig_*` are inferred from the `Nevnt` formula and have not been checked against the
 original setup.
+
+## Reproducing arXiv:1607.00990
+
+```bash
+docker run --rm -v "$PWD:/work" pytmdp:dev make -C fortran
+docker run --rm -v "$PWD:/work" pytmdp:dev \
+    python3 scripts/reproduce_1607_00990.py yaml/repro/1607.00990.yml -j 20
+```
+
+This computes every curve of Figs. 1 and 4 of the paper with the paper's setup:
+19 curves, about 6000 $m_{\gamma\gamma}$ points, roughly 30 min on 20 cores.
+
+- **Outputs.** In `results/1607.00990/`:
+  - one `.dat` file per curve
+  - plots of our curves over the paper's (`fig1L.png`, `fig1R.png`, `fig4L.png`, `fig4R.png`)
+  - `summary.md`
+- **Comparison.** Each curve is compared with the same curve extracted from the paper's vector
+  figures (`reference/1607.00990/`, made by `scripts/tools/digitize_1607_00990.py` from the
+  arXiv source). The script exits with status 0 when every curve agrees within the tolerance
+  (1%).
+- **Spot checks.** `tests/test_repro_1607_00990.py` checks six points (dip, bump, LO Green
+  function, FCC) to within 0.5% in about 30 s.
+
+Setup (`yaml/repro/1607.00990.yml`):
+
+- **From the paper.** CT14NLO; $\mu_R=\mu_F=m_{\gamma\gamma}$; $|\eta_\gamma|<2.5$.
+  - Photon cut: $p_T^\gamma>40$ GeV at the LHC, and additionally $p_T^\gamma>0.4\,m_{\gamma\gamma}$
+    at the FCC.
+  - Top quark: $m_t=173$ GeV, $\Gamma_t=1.498$ GeV.
+  - Green function: NLO (Fig. 1 left: LO), with $\mu=40$ GeV (Fig. 1: 20–160 GeV).
+- **Not in the paper, but needed to match it.** $\alpha_s$ is run at LO from
+  $\alpha_s(M_Z)=0.1185$ (libQCD `NQCD=0`, as in `MKD_gg2aa.f`). With NLO running the cross
+  section is 1.4% lower everywhere.
+
+**Result (2026-10-08): all 19 curves agree with the paper.** The largest deviation is 0.31%,
+and the mean deviation of every curve is below 0.02%. The dip and bump positions agree to within
+one grid step (0.1 GeV for Fig. 1, 0.25 GeV for Fig. 4). The full table and the plots are in
+[docs/repro-1607.00990/](docs/repro-1607.00990/summary.md).
+
+| Figure | Curves | Max. abs. deviation |
+|---|---|---|
+| Fig. 1 right (LHC, $G_{\rm NLO}$, $\mu$ = 20–160 GeV, one-loop) | 5 | 0.17% |
+| Fig. 1 left (LHC, $G_{\rm LO}$, $\mu$ = 20–160 GeV, one-loop) | 5 | 0.21% |
+| Fig. 4 left (LHC, $m_t$ = 167–179 GeV) | 5 | 0.12% |
+| Fig. 4 right (FCC, $p_T>0.4\,m_{\gamma\gamma}$, $m_t$ = 167–179 GeV) | 5 | 0.31% |
+
+![Fig. 1 right reproduced](docs/repro-1607.00990/fig1R.png)
+
+To make pyTMDP templates with this setup, use `yaml/templates/paper1607_LHC13.yml` and
+`paper1607_FCC100.yml` with `scripts/make_templates.py`. The background samples are inputs and are
+not produced here.
 
 ## Background data
 
