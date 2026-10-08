@@ -14,6 +14,10 @@ C     J=0: 0, 1: A + B*G_0, 2: A + B*G, 3: B*(G-G_0)
       DOUBLE COMPLEX G0,GRN,GRN0,GRN1
       COMMON /GRN/E0,GRN,GRN0,IA,IB
       DATA E0/12345.67890D0/
+C     Order of the QCD potential in the Green function (0:LO, 1:NLO);
+C     set through COMMON /GRNORD/, default 1 (BLOCK DATA GRNORDBD).
+      INTEGER IORDG
+      COMMON /GRNORD/ IORDG
       DOUBLE COMPLEX   MTPPPP,MTMPPP,MTMMPP,MTMPPM
       DOUBLE PRECISION ATPPPP,ATMPPP,ATMMPP,ATMPPM
       DOUBLE PRECISION A0PPPP,A2PPPP,A4PPPP,A0MMPP,A2MMPP,A4MMPP
@@ -57,7 +61,7 @@ C     J=0: 0, 1: A + B*G_0, 2: A + B*G, 3: B*(G-G_0)
          ELSE
 c     0:G0eps, 1:G1eps, 2:G0Gt, 3:G1Gt, 4:GLO
 c     CALL GRNLOMSB  (E,MT,GT,4,ASG,   MU,REG,IMG)
-            CALL GRNNLOMSB (E,MT,GT,ASG,MU,MU, 1,REG,IMG) ! 0:LO,1:NLO
+            CALL GRNNLOMSB (E,MT,GT,ASG,MU,MU,IORDG,REG,IMG) ! 0:LO,1:NLO
             IF ( J.EQ.2 ) THEN
                IA = 1
                GRN = DCMPLX(REG,IMG)
@@ -94,4 +98,10 @@ c         GG2AAG = GG2AAG + ASG/PI*AT1MMPP
       ENDIF
       
       RETURN
+      END
+C
+      BLOCK DATA GRNORDBD
+      INTEGER IORDG
+      COMMON /GRNORD/ IORDG
+      DATA IORDG /1/
       END

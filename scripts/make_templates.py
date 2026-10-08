@@ -46,6 +46,10 @@ PARAMS = {
     'NCALL': ('ncall', 50000),
     'ITMX': ('itmx', 6),
 }
+# optional integer switches, passed only when set in the config
+# (defaults in fortran/src/mktemplate.f: 3, 1, 0, 0)
+SWITCHES = {'MODE': 'mode', 'IORDG': 'iordg', 'NQCDIN': 'nqcd',
+            'LEGACYCUT': 'legacycut'}
 
 
 def repo_path(path):
@@ -133,6 +137,9 @@ def namelist(cfg, mt, gt, outfile):
             continue  # keep the Fortran default (single-precision 0.4)
         else:
             lines.append(' {}={!r},'.format(key, float(val)))
+    for key, ykey in SWITCHES.items():
+        if ykey in cfg:
+            lines.append(' {}={:d},'.format(key, int(cfg[ykey])))
     lines.append(" PDFSET='{}',".format(cfg.get('pdfset', 'CT14lo')))
     lines.append(' MT={!r}, GT={!r},'.format(float(mt), float(gt)))
     lines.append(" OUTFILE='{}',".format(outfile))
