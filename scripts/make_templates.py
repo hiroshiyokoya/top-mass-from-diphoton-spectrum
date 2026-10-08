@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Generate gg -> gamma gamma M_aa templates Tab_<mt>_<gt>.dat.
 
-Runs fortran/build/mktemplate.exe once per (m_t, Gamma_t) point, in
-parallel, and writes one file per point (the format read by fit/TMDP.py).
+Runs fortran/build/mktemplate.exe for every (m_t, Gamma_t) point and writes
+one file per point (the format read by fit/TMDP.py).  Each template is
+split into chunks of m_aa points (--chunk, default 25) that run as
+separate processes in parallel and are joined afterwards; chunks of an
+interrupted run are reused.  Each chunk skips the random numbers of the
+points before it, so chunks do not repeat each other's VEGAS sequence.
 Intended to run inside the tmdp Docker image:
 
     python3 scripts/make_templates.py config/templates/LHC13T.yml
@@ -22,6 +26,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -109,10 +114,24 @@ def collect_points(cfg):
     return sorted(by_name.values(), key=lambda p: (p[1], p[0]))
 
 
-def namelist(cfg, mt, gt, outfile):
+def maa_grid(cfg):
+    lo = float(cfg.get('maa_min', PARAMS['MAAMIN'][1]))
+    hi = float(cfg.get('maa_max', PARAMS['MAAMAX'][1]))
+    step = float(cfg.get('maa_step', PARAMS['DMAA'][1]))
+    n = int(round((hi - lo) / step)) + 1
+    return np.round(lo + step * np.arange(n), 6)
+
+
+def namelist(cfg, mt, gt, outfile, maa_range=None, nskip=0):
     lines = ['&TMPL']
+    if nskip:
+        lines.append(' NSKIP={:d},'.format(int(nskip)))
     for key, (ykey, default) in PARAMS.items():
         val = cfg.get(ykey, default)
+        if maa_range is not None and key == 'MAAMIN':
+            val = maa_range[0]
+        if maa_range is not None and key == 'MAAMAX':
+            val = maa_range[1]
         if isinstance(default, int):
             lines.append(' {}={:d},'.format(key, int(val)))
         elif key == 'PTRATIO' and ykey not in cfg:
@@ -129,22 +148,44 @@ def namelist(cfg, mt, gt, outfile):
     return '\n'.join(lines) + '\n'
 
 
-def run_one(exe, cfg, mt, gt, outdir):
-    outfile = os.path.join(outdir, template_name(mt, gt))
-    nml = namelist(cfg, mt, gt, outfile)
-    t0 = time.time()
+def chunk_dir(outdir, mt, gt):
+    return os.path.join(outdir, '.chunks', template_name(mt, gt)[:-4])
+
+
+def chunk_file(outdir, mt, gt, maa0):
+    return os.path.join(chunk_dir(outdir, mt, gt), '{:09.4f}.dat'.format(maa0))
+
+
+def run_chunk(exe, cfg, mt, gt, maa, outdir, nskip):
+    """One mktemplate run for the m_aa points `maa` of one template, which
+    start at index `nskip` of the full m_aa grid (mktemplate skips the
+    random numbers of the preceding points, so chunks are independent)."""
+    chunk = chunk_file(outdir, mt, gt, maa[0])
+    nml = namelist(cfg, mt, gt, chunk, (maa[0], maa[-1]), nskip)
     proc = subprocess.run([exe], input=nml, capture_output=True, text=True)
     if proc.returncode != 0:
-        raise RuntimeError('mt={} gt={} failed:\n{}'.format(
-            mt, gt, proc.stdout[-2000:] + proc.stderr[-2000:]))
-    data = np.loadtxt(outfile)
-    expected = int(round((cfg.get('maa_max', 400.0)
-                          - cfg.get('maa_min', 300.0))
-                         / cfg.get('maa_step', 0.1))) + 1
-    if data.shape != (expected, 3) or not np.all(np.isfinite(data)):
-        raise RuntimeError('{}: unexpected content, shape {}'.format(
-            outfile, data.shape))
-    return outfile, time.time() - t0
+        raise RuntimeError('mt={} gt={} m_aa={}-{} failed:\n{}'.format(
+            mt, gt, maa[0], maa[-1],
+            proc.stdout[-2000:] + proc.stderr[-2000:]))
+    data = np.loadtxt(chunk, ndmin=2)
+    if (data.shape != (len(maa), 3) or not np.allclose(data[:, 0], maa)
+            or not np.all(np.isfinite(data))):
+        os.remove(chunk)
+        raise RuntimeError('{}: unexpected content'.format(chunk))
+
+
+def assemble(cfg, mt, gt, outdir, chunks):
+    """Join the chunk files of one template into Tab_<mt>_<gt>.dat."""
+    data = np.vstack([np.loadtxt(c, ndmin=2) for c in chunks])
+    if not np.allclose(data[:, 0], maa_grid(cfg)):
+        raise RuntimeError('{}: chunks do not cover the m_aa grid'.format(
+            template_name(mt, gt)))
+    outfile = os.path.join(outdir, template_name(mt, gt))
+    with open(outfile, 'w') as f:
+        # the line format of mktemplate.f: (F12.4,1X,2(1PE15.5))
+        for maa, value, error in data:
+            f.write('{:12.4f} {:15.5E}{:15.5E}\n'.format(maa, value, error))
+    shutil.rmtree(chunk_dir(outdir, mt, gt))
 
 
 def main():
@@ -152,6 +193,8 @@ def main():
     parser.add_argument('config', help='template config (config/templates/)')
     parser.add_argument('-j', '--jobs', type=int, default=os.cpu_count(),
                         help='parallel runs (default: all CPUs)')
+    parser.add_argument('--chunk', type=int, default=25,
+                        help='m_aa points per mktemplate run (default 25)')
     parser.add_argument('--exe', default=DEFAULT_EXE)
     parser.add_argument('--force', action='store_true',
                         help='recompute templates that already exist')
@@ -173,38 +216,66 @@ def main():
 
     todo = [(mt, gt) for mt, gt in points if args.force or not
             os.path.exists(os.path.join(outdir, template_name(mt, gt)))]
-    print('{} templates requested, {} to compute, {} jobs -> {}'.format(
-        len(points), len(todo), args.jobs, outdir), flush=True)
+    maa = maa_grid(cfg)
+    size = max(1, args.chunk)
+    parts = [(i, maa[i:i + size]) for i in range(0, len(maa), size)]
+    jobs, chunks_of = [], {}
+    for mt, gt in todo:
+        if args.force and os.path.isdir(chunk_dir(outdir, mt, gt)):
+            shutil.rmtree(chunk_dir(outdir, mt, gt))
+        os.makedirs(chunk_dir(outdir, mt, gt), exist_ok=True)
+        chunks_of[(mt, gt)] = [chunk_file(outdir, mt, gt, p[0])
+                               for _, p in parts]
+        jobs += [(mt, gt, i, p) for i, p in parts  # reuse finished chunks
+                 if not os.path.exists(chunk_file(outdir, mt, gt, p[0]))]
+    print('{} templates requested, {} to compute: {} runs of <= {} m_aa '
+          'points, {} parallel -> {}'.format(
+              len(points), len(todo), len(jobs), size, args.jobs, outdir),
+          flush=True)
 
     manifest = {
         'config': cfg,
         'config_file': os.path.relpath(repo_path(args.config), ROOT_DIR),
         'templates': [template_name(mt, gt) for mt, gt in points],
+        'chunk': size,
         'git_commit': subprocess.run(
             ['git', '-C', ROOT_DIR, 'rev-parse', 'HEAD'],
             capture_output=True, text=True).stdout.strip(),
         'started': time.strftime('%Y-%m-%dT%H:%M:%S'),
     }
 
-    failed = []
-    done = 0
+    failed = set()
+    t0 = time.time()
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = {pool.submit(run_one, args.exe, cfg, mt, gt, outdir):
-                   (mt, gt) for mt, gt in todo}
-        for fut in as_completed(futures):
-            mt, gt = futures[fut]
+        futures = {pool.submit(run_chunk, args.exe, cfg, mt, gt, p, outdir,
+                               i): (mt, gt) for mt, gt, i, p in jobs}
+        step = max(1, len(futures) // 20)
+        for n, fut in enumerate(as_completed(futures), 1):
             try:
-                outfile, dt = fut.result()
-                done += 1
-                print('[{}/{}] {} ({:.0f} s)'.format(
-                    done, len(todo), os.path.basename(outfile), dt),
-                    flush=True)
+                fut.result()
             except Exception as err:  # keep the other runs going
-                failed.append((mt, gt))
+                failed.add(futures[fut])
                 print('FAILED', err, file=sys.stderr, flush=True)
+            if n % step == 0 or n == len(futures):
+                print('[{}/{}] runs done, {:.0f} s'.format(
+                    n, len(futures), time.time() - t0), flush=True)
+
+    done = 0
+    for mt, gt in todo:
+        if (mt, gt) in failed:
+            continue
+        try:
+            assemble(cfg, mt, gt, outdir, chunks_of[(mt, gt)])
+            done += 1
+        except Exception as err:
+            failed.add((mt, gt))
+            print('FAILED', err, file=sys.stderr, flush=True)
+    chunks_root = os.path.join(outdir, '.chunks')
+    if os.path.isdir(chunks_root) and not os.listdir(chunks_root):
+        os.rmdir(chunks_root)
 
     manifest['finished'] = time.strftime('%Y-%m-%dT%H:%M:%S')
-    manifest['failed'] = failed
+    manifest['failed'] = sorted(failed)
     with open(os.path.join(outdir, 'manifest.json'), 'w') as f:
         json.dump(manifest, f, indent=1)
     missing = [p for p in points if not os.path.exists(

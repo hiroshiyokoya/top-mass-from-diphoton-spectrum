@@ -5,9 +5,16 @@ $m_{\gamma\gamma}\simeq 2m_t$, at hadron colliders, and its use to determine the
 
 In $gg\to\gamma\gamma$ the top quark enters only through the one-loop box. Its absorptive part opens
 at $m_{\gamma\gamma}=2m_t$ and produces a dip–bump structure in $d\sigma/dm_{\gamma\gamma}$. Near
-threshold, the amplitude is matched to the NRQCD Green function of the $t\bar t$ system,
-$\mathcal{M}^{\rm 1loop}+\mathcal{B}\,[G(E+i\Gamma_t)-G_0(E)]$, which resums the Coulomb (bound-state)
-effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
+threshold, the top-loop amplitude is matched to the NRQCD Green function of the $t\bar t$
+system,
+
+```math
+M_t^{\rm match} = M_t^{\rm 1loop} + \mathcal{B}_t \left[ G(\vec 0; E+i\Gamma_t) - G^{(0)}(\vec 0; E) \right] ,
+\qquad E = m_{\gamma\gamma} - 2m_t ,
+```
+
+where $G^{(0)}$ is the Green function without QCD interaction and width.
+This resums the Coulomb (bound-state) effects. The location and shape of the structure depend on $m_t$ and $\Gamma_t$.
 
 - S. Kawabata and H. Yokoya, *Top-quark mass from the diphoton mass spectrum*,
   [arXiv:1607.00990](https://arxiv.org/abs/1607.00990), Eur. Phys. J. C 77 (2017) 323. This
@@ -110,15 +117,28 @@ docker run --rm -v "$PWD:/work" tmdp:dev \
 - A template set (`config/templates/*.yml`) fixes the physics settings and the $(m_t,\Gamma_t)$
   points. Points are given as `masses` × `widths`, as a list of such `grids`, or as explicit
   `points`.
-- Each point is one `mktemplate` run, written to `outdir` as `Tab_<mt>_<Gt>.dat` together with a
+- Each $(m_t,\Gamma_t)$ point is written to `outdir` as `Tab_<mt>_<Gt>.dat`, together with a
   `manifest.json` (configuration and git commit).
-- Existing files are skipped unless `--force` is given; `--check` only lists the points.
-- One template (1001 points, VEGAS 50 000 × 6) takes about 80 min on one core, estimated from a
-  timed low-statistics run.
+- Each template is split into chunks of `--chunk` $m_{\gamma\gamma}$ points (default 25). The
+  chunks of all templates run as separate `mktemplate` processes, `-j` at a time, and are joined
+  afterwards.
+  - An interrupted run resumes from the finished chunks.
+  - Each chunk first skips the random numbers that the preceding $m_{\gamma\gamma}$ points would
+    have used (`NSKIP` in `mktemplate.f`), so the chunks do not repeat each other's VEGAS random
+    sequence.
+  - When VEGAS uses exactly `NCALL` calls per iteration and runs all `ITMX` iterations, the result
+    equals that of one run per template. For example, with VEGAS 5000 × 3 the mean relative
+    difference was $3\times10^{-9}$. Otherwise the sequences are only independent, and the
+    numbers differ within the integration errors.
+  - With `--chunk 1001` (no split) the output is byte-identical to one run per template.
+- Existing templates are skipped unless `--force` is given; `--check` only lists the points.
+- Cost: with VEGAS 50 000 × 6 at $\sqrt s=13$ TeV, one $m_{\gamma\gamma}$ point takes about 13–15 s
+  on one core (measured with 19–20 parallel processes). A template of 1001 points is therefore
+  about 4 core-hours. The CPU time grows roughly linearly with `ncall` × `itmx`.
 
 | Template set | Setup | Templates |
 |---|---|---|
-| `paper1607_LHC13`, `paper1607_FCC100` | arXiv:1607.00990: CT14nlo, $\Gamma_t=1.498$ GeV, LHC $p_T>40$ GeV / FCC $p_T>0.4\,m_{\gamma\gamma}$; $m_t$ = 165–181 GeV | 33 each |
+| `paper1607_LHC13`, `paper1607_FCC100` | arXiv:1607.00990: CT14nlo, $\Gamma_t=1.498$ GeV, LHC $p_T>40$ GeV / FCC $p_T>0.4m_{\gamma\gamma}$; $m_t$ = 165–181 GeV | 33 each |
 | `LHC13T`, `LHC13L`, `HELHC27T`, `FCC100` | the 2018 sets read by `fit/config/`: mass scans at $\Gamma_t=1.5$ GeV plus width and 2D scans, CT14lo assumed; T = tight, L = loose $p_T$ cut (inferred) | 50, 33, 185, 379 |
 | `test` | two masses, low statistics, for `tests/` | 2 |
 
@@ -146,7 +166,7 @@ This computes every curve of Figs. 1 and 4 of the paper with the paper's setup: 
 Setup (`config/repro/1607.00990.yml`):
 
 - **From the paper.** CT14NLO; $\mu_R=\mu_F=m_{\gamma\gamma}$; $|\eta_\gamma|<2.5$.
-  - Photon cut: $p_T^\gamma>40$ GeV at the LHC, and additionally $p_T^\gamma>0.4\,m_{\gamma\gamma}$
+  - Photon cut: $p_T^\gamma>40$ GeV at the LHC, and additionally $p_T^\gamma>0.4m_{\gamma\gamma}$
     at the FCC.
   - Top quark: $m_t=173$ GeV, $\Gamma_t=1.498$ GeV.
   - Green function: NLO (Fig. 1 left: LO), with $\mu=40$ GeV (Fig. 1: 20–160 GeV).
@@ -163,7 +183,7 @@ one grid step (0.1 GeV for Fig. 1, 0.25 GeV for Fig. 4). The full table and the 
 | Fig. 1 right (LHC, $G_{\rm NLO}$, $\mu$ = 20–160 GeV, one-loop) | 5 | 0.17% |
 | Fig. 1 left (LHC, $G_{\rm LO}$, $\mu$ = 20–160 GeV, one-loop) | 5 | 0.21% |
 | Fig. 4 left (LHC, $m_t$ = 167–179 GeV) | 5 | 0.12% |
-| Fig. 4 right (FCC, $p_T>0.4\,m_{\gamma\gamma}$, $m_t$ = 167–179 GeV) | 5 | 0.31% |
+| Fig. 4 right (FCC, $p_T>0.4m_{\gamma\gamma}$, $m_t$ = 167–179 GeV) | 5 | 0.31% |
 
 ![Fig. 1 right reproduced](docs/repro-1607.00990/fig1R.png)
 
