@@ -19,9 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
--------------------------------------------------------------------------------
-This licence covers the original code of this repository. The third-party code
-listed in THIRD_PARTY.md (HPLOG, DDILOG, QCD-PEGASUS, the VEGAS variant and the
-CHAPLIN interface header in fortran/extern/) is not covered and remains under
-the terms of its respective authors.
