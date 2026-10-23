@@ -1,3 +1,21 @@
+C     gg2aaA.f: the top-loop amplitude at the threshold point
+C     s = 4 m_t**2 (r = 1) in closed form, as a function of cos(theta*)
+C     only (independent of m_t).  Used by the 2016 partial-wave driver
+C     legacy/Pwd_gg2aa.f (and declared in legacy/Argand_gg2aa.f); the
+C     coefficients A0PPPP, A2PPPP, ... in gg2aaG.f are presumably its
+C     partial-wave projections (inference, not recomputed here).
+C     Not called by mktemplate.
+C
+C     GG2AAA (COS, L1234)
+C       COS    cos(theta*) in the gg rest frame
+C       L1234  helicities (+-1) of the four bosons, classes as in GG2AAQ
+C     Returns the real part (dimensionless) of GG2AAT at r = 1, with
+C       S0 = t/(4 m_t**2) = -(1-COS)/2,  T0 = u/(4 m_t**2) = -(1+COS)/2.
+C     BSFN, BTFN = Re B(S0), B(T0) (bubble, BS and BT are the beta of
+C     S0 and T0); TSFN, TTFN = T(S0), T(T0) (triangle); -pi**2/4 is
+C     Re T(1); IRS, IRT, IST = Re I(1,S0), Re I(1,T0), Re I(S0,T0)
+C     (box).  Same helicity classes and normalisation as GG2AAT.
+C     DDILOG is declared but not used.
       DOUBLE PRECISION FUNCTION GG2AAA (COS,L1234)
       IMPLICIT NONE
       DOUBLE PRECISION COS
@@ -8,7 +26,6 @@
       DOUBLE PRECISION S0,T0,A1,A2,A3,BS,BT
       DOUBLE PRECISION BSFN,BTFN,TSFN,TTFN,FRFN,IRS,IRT,IST
       DOUBLE COMPLEX   FFN
-      DOUBLE PRECISION DDILOG
       S0 = -(ONE-COS)*HALF
       T0 = -(ONE+COS)*HALF
       A1 = DSQRT(ONE/(-S0))
@@ -48,6 +65,9 @@
       RETURN
       END
 
+C
+C     FRFN (A): the R = 1 term (b = 0) of the box function I(1,S) of
+C     GG2AAT/IFN in closed form, with A = sqrt(1 - (1+S)/S); real.
       DOUBLE PRECISION FUNCTION FRFN (A)
       IMPLICIT NONE
       DOUBLE PRECISION A
@@ -65,6 +85,10 @@
       RETURN
       END
       
+C     FFN (S, B, A): the S term of the box function I(1,S) (or of
+C     I(S0,T0)), written with dilogarithms of (A+-1)/(A+-B) and a log
+C     of (S - i EPS)(A**2 - B**2); complex, the caller keeps the real
+C     part.  B is the beta of S, A as in FRFN (or A3 for I(S0,T0)).
       DOUBLE COMPLEX FUNCTION FFN (S,B,A)
       IMPLICIT NONE
       DOUBLE PRECISION S,A,B
