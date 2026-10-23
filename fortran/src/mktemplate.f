@@ -31,6 +31,16 @@ C       NCALL, ITMX  VEGAS calls / iterations          (50000, 6)
 C       OUTFILE output file                            (Tab_<MT>_<GT>.dat)
 C     Output: one line per M_aa,  "M_aa  dsigma/dM_aa[fb/GeV]  error",
 C     in the format read by TMDP.read_template_from_file.
+C
+C     COMMON blocks shared between the main program and INT2:
+C       /SIGAA/  MT, GT [GeV]; MU = scale of the Green function [GeV];
+C                ASG = alpha_s(MU); RS = sqrt(s) [GeV]; MAA = current
+C                M_aa [GeV]; ETMAX; PTMIN [GeV]
+C       /COUP/   ALP = alpha_em (1/128); ASR = alpha_s(MUR);
+C                MUR, MUF = renormalisation / factorisation scale [GeV]
+C       /CUTS/   PTRATIO, MODE, LEGACYCUT (see the namelist above)
+C       /GRNORD/ IORDG, read by GG2AAG (lib/amp/gg2aaG.f)
+C       /RESULT/ S1, S2 = integral and error of the last VEGAS call
       PROGRAM MKTEMPLATE
       IMPLICIT NONE
       INTEGER I,NPT
@@ -86,6 +96,9 @@ C.....Defaults (as in MKD_gg2aa.f)
       IF ( OUTFILE.EQ.' ' )
      -     WRITE (OUTFILE,'("Tab_",F5.1,"_",F4.2,".dat")') MT,GT
 C.....
+C     Couplings.  libQCD (lib/qcd/QCDlibs.f) is set up with the
+C     alpha_s running order NQCD = NQCDIN, from alpha_s(MZ) = 0.1185.
+C     The alpha_s of the Green function, ASG, is evaluated once at MUG.
       ALP = 1D0/128D0
       NQCD = NQCDIN
       CALL QCDLIBS
@@ -104,6 +117,12 @@ C.....
       WRITE (6,'(A,F9.1,A,A,A,F7.2,A,F5.2)') ' # RS=',RS,' PDF=',
      -     TRIM(PDFSET),' MT=',MT,' GT=',GT
       OPEN (10,FILE=OUTFILE,STATUS='REPLACE')
+C     Loop over the M_aa grid.  At each point mu_R = mu_F = M_aa, and
+C     VEGAS integrates INT2 = d sigma/d tau [fb] (tau = M_aa**2/s) over
+C     the two photon pseudo-rapidities (NDIM = 2, accuracy 1D-4).
+C     Then d sigma/d M_aa = (d tau/d M_aa) * S1 = 2 M_aa/s * S1.
+C     Note (docs/REVIEW.md P10): the VEGAS random generator RANF has a
+C     fixed seed, so every run starts from the same random sequence.
       NPT = NINT((MAAMAX-MAAMIN)/DMAA) + 1
       DO 100 I = 1, NPT
          MAA = MAAMIN + DMAA*(I-1)
@@ -122,6 +141,14 @@ C
 C     Integrand: INT2 of MKD_gg2aa.f, with the relative pT cut
 C     (0.4 there, single precision) taken from PTRATIO and the top
 C     amplitude selected by MODE as in Sig_gg2aa.f.
+C
+C     X(1), X(2) in [0,1] are mapped to the photon pseudo-rapidities
+C     ET1, ET2.  The range of ET2 keeps |ET1+ET2| <= -log(tau), i.e.
+C     x1, x2 <= 1.  With Y = (ET1+ET2)/2 (rapidity of the gg system) and
+C     ETHAT = (ET1-ET2)/2: cos(theta*) = tanh(ETHAT), x1,2 = sqrt(tau)
+C     exp(+-Y).  JAC is the Jacobian of (X(1),X(2)) -> (Y, cos(theta*)).
+C     Returns d sigma/d tau [fb] at the M_aa of COMMON /SIGAA/, or 0 for
+C     a point rejected by the cuts (LASTV for LEGACYCUT = 1).
       DOUBLE PRECISION FUNCTION INT2 (X)
       IMPLICIT NONE
       DOUBLE PRECISION X(2)
@@ -144,11 +171,16 @@ C     amplitude selected by MODE as in Sig_gg2aa.f.
       DOUBLE COMPLEX   AMP,AMPQ,AMPT,AMPG
       DOUBLE PRECISION SAMP1,SAMP2,SAMP3,SAMP4,SAMP5
       DOUBLE PRECISION SAMP,FAC,JAC
+C     Sum of quark charges squared: Q2Q = 3*(1/9) + 2*(4/9) = 11/9
+C     for u, d, s, c, b; Q2T = e_t**2 = 4/9.
       DOUBLE PRECISION Q2Q,Q2T
       PARAMETER ( Q2Q = 1.22222222D0, Q2T = 0.4444444444D0 )
-      DOUBLE PRECISION ONE,TWO,FOUR,HALF, PI
-      PARAMETER ( ONE = 1D0, TWO = 2D0, FOUR = 4D0, HALF = 0.5D0 )
+      DOUBLE PRECISION ONE, HALF, PI
+      PARAMETER ( ONE = 1D0, HALF = 0.5D0 )
       PARAMETER ( PI = 3.141592654D0 )
+C     L1234L(:,k): the 16 helicity sets (+-1) of the four external
+C     bosons; entries (1,2) and (3,4) form the two pairs (gluons and
+C     photons).
       INTEGER I,L1234L(4,16)
       DATA (L1234L(I, 1),I=1,4) / 1, 1, 1, 1/
       DATA (L1234L(I, 2),I=1,4) / 1, 1, 1,-1/
@@ -186,6 +218,7 @@ C...  Integrate over Eta1 and Eta2
       COS    = DTANH(ETHAT)
       JAC    = HALF * ET1JAC * ET2JAC / DCOSH(ETHAT)**2
 C...  Kinematical Cuts
+C     pT of each photon = (M_aa/2) sin(theta*).
       PTA = MAA*DSQRT(ONE-COS**2) * HALF
       IF ( DABS(ET1).GT.ETMAX .OR. DABS(ET2).GT.ETMAX .OR.
      -     PTA.LT.PTMIN .OR. PTA.LT.PTRATIO*MAA ) THEN
@@ -193,11 +226,20 @@ C...  Kinematical Cuts
          RETURN
       ENDIF
 C...  Gluon Distribution Function
+C     EVOLVEPDF (LHAPDF) returns x*f(x,MUF); index 0 is the gluon.
       X1  = R * DEXP( Y)
       X2  = R * DEXP(-Y)
       CALL EVOLVEPDF (X1,MUF,PDF1)
       CALL EVOLVEPDF (X2,MUF,PDF2)
 C---- Matrix Elements Square ----
+C     For each helicity class the amplitude is
+C        Q2Q*A_light + Q2T*(A_top,1-loop + A_threshold)
+C     with A_light = GG2AAQ, A_top,1-loop = GG2AAT (only for MODE 0, 3)
+C     and A_threshold = GG2AAG selected by MODE (0: none, 1: A + B G0,
+C     2: A + B G, 3: B (G - G0)); see lib/amp/gg2aaG.f.  The amplitudes
+C     are dimensionless (GG2AAQ = 1 for ++++); the remaining factors
+C     are in FAC below.  MPPP etc. name a class: e.g. (1,1,1,-1)
+C     stands for the 8 sets with one helicity different.
 C...  PPPP
       AMPQ = GG2AAQ (   MAA,COS,L1234L(1,1))
       AMPT = DCMPLX(0D0,0D0)
@@ -238,8 +280,14 @@ C...  MPPM
       AMPG = GG2AAG (MT,GT,MU,ASG,MAA,COS,L1234L(1,7),MODE)
       AMP  = Q2Q*AMPQ + Q2T*(AMPT+AMPG)
       SAMP5 = DBLE(AMP*DCONJG(AMP))
+C     Sum over the 16 helicity sets: each class is weighted by the
+C     number of sets in it (2 + 8 + 2 + 2 + 2 = 16).
       SAMP = 2D0*SAMP1 + 8D0*SAMP2 + 2D0*SAMP3 + 2D0*SAMP4 + 2D0*SAMP5
 C...  Hadronic Cross Section
+C     FAC = alpha**2 alpha_s(MUR)**2/(128 pi M_aa**2) * JAC, times
+C     389429.57D6 to convert GeV**-2 to fb.  PDF/x gives f(x).
+C     Note (docs/REVIEW.md P12): (hbar c)**2 = 0.3893794 GeV**2 mb would
+C     give 389379.4D6.
       FAC  = ALP**2*ASR**2/(128D0*PI*MAA**2) * JAC * 389429.57D6 ! [fb]
       INT2 = FAC * SAMP * PDF1(0) / X1 * PDF2(0) / X2 ! dSigma / dTau [fb]
       LASTV = INT2

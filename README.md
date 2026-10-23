@@ -56,6 +56,7 @@ The repository has two parts:
 | `scripts/make_templates.py` | runs `mktemplate` over a $(m_t,\Gamma_t)$ grid in parallel |
 | `scripts/reproduce_1607_00990.py` | computes all curves of Figs. 1 and 4 of the paper and compares them with `reference/` |
 | `scripts/tools/digitize_1607_00990.py` | extracts the curves from the figure PDFs of the arXiv source |
+| `scripts/check_regression.sh` | regression check: short `mktemplate` runs for four settings, prints the checksums of the tables (identical output before and after a change that should not affect results) |
 | `config/templates/` | template sets: the paper's setup (`paper1607_*`), the 2018 sets used by `fit/`, a quick test set |
 | `config/repro/1607.00990.yml` | setup and curves for reproducing the paper |
 | `reference/1607.00990/` | curves extracted from the paper's vector figures (CSV) |

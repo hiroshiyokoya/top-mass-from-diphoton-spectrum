@@ -1,3 +1,23 @@
+C     QCDlibs.f (libQCD): running alpha_s and quark-mass conversions.
+C     alpha_s is evolved with QCD-PEGASUS (fortran/extern/pegasus).
+C     COMMON blocks (qcdparam.inc):
+C       /QCDCON/ PI
+C       /QCDIN/  MZ, ASZ = alpha_s(MZ), NQCD
+C       /PMASS/  pole masses PMT, PMB, PMC, PMS [GeV]
+C       /MASS0/  MSbar masses MT0, MB0, MC0, MS0 [GeV]
+C       /QCDLIB/ NC, NF, CA, CF, TR (B0, QTHR are not set here)
+C     NQCD is the order of the alpha_s running, passed to PEGASUS as
+C     NAORD (0: LO, solved exactly; 1: NLO, 2, 3: Runge-Kutta).
+C     It must be set before the first ASQCD call (QCDLIBS makes one),
+C     because PEGASUS is set up only once.
+C
+C     QCDLIBS: sets MZ = 91.2 GeV, alpha_s(MZ) = 0.1185, n_f = 5, the
+C     colour factors and the quark masses: top pole mass 173.2 GeV
+C     (-> MSbar MT0); MSbar m_b = 4.2, m_c = 1.275, m_s = 0.115 GeV
+C     (-> pole masses).  PMB, PMC and PMT are the flavour thresholds of
+C     ASQCD.  PMT is fixed here and does not follow the m_t of a run.
+C     The conversions call ASQCD while PMB and PMC are still being set
+C     (not yet set), so each uses the thresholds set so far.
       SUBROUTINE QCDLIBS
       IMPLICIT NONE
       INCLUDE 'qcdparam.inc'
@@ -27,6 +47,18 @@ C.....
       RETURN
       END
 C.....
+C
+C     ASQCD (Q): MSbar alpha_s at the scale Q [GeV], from alpha_s(MZ),
+C     evolved by AS_PEGASUS at order NQCD (in a = alpha_s/(4 pi)) in a
+C     variable-flavour scheme:
+C       Q > PMT        : n_f = 5 from PMT (the n_f = 6 line is commented
+C                        out, so this equals 5-flavour running from MZ)
+C       PMB < Q <= PMT : n_f = 5 from MZ
+C       PMC < Q <= PMB : n_f = 4 from PMB
+C       Q <= PMC       : n_f = 3 from PMC
+C     At the b and c thresholds alpha_s is matched by the factor
+C     (1 - 14/3 a**2); AST6 is computed but not used.  The Q.EQ.Q0
+C     branch has no effect (Q0 is never updated and there is no RETURN).
       DOUBLE PRECISION FUNCTION ASQCD (Q)
       IMPLICIT NONE
       DOUBLE PRECISION Q0,AS0,Q,Q1,AS_PEGASUS
@@ -70,6 +102,10 @@ c     ASQCD = AS_PEGASUS(Q1**2,PMT**2,AST6/(4D0*PI),6)*(4D0*PI)
       RETURN
       END
 C.....
+C
+C     INITASQCD: sets up PEGASUS: NAORD = NQCD, NASTPS = 10 Runge-Kutta
+C     steps, colour factors, beta-function coefficients
+C     (BETAFCT_PEGASUS); prints the order.
       SUBROUTINE INITASQCD
       IMPLICIT NONE
       DOUBLE PRECISION CF_PEGASUS,CA_PEGASUS,TR_PEGASUS
@@ -87,9 +123,12 @@ C.....
       RETURN
       END
 C.....
+C
+C     POLEMASS (M0): pole mass from the MSbar mass M0 [GeV] at one loop,
+C     m_pole = M0 (1 + C_F alpha_s(M0)/pi).
       DOUBLE PRECISION FUNCTION POLEMASS (M0)
       IMPLICIT NONE
-      DOUBLE PRECISION M0,MP,ASQCD,ASM,D1
+      DOUBLE PRECISION M0, ASQCD,ASM,D1
       EXTERNAL ASQCD
       INCLUDE 'qcdparam.inc'
       ASM      = ASQCD(M0)
@@ -98,9 +137,13 @@ C.....
       RETURN
       END
 C.....
+C
+C     MSBARMASS (M0): inverse of POLEMASS for a pole mass M0 [GeV],
+C     m = M0/(1 + C_F alpha_s(M0)/pi).  The NNLO variant is commented
+C     out.
       DOUBLE PRECISION FUNCTION MSBARMASS (M0)
       IMPLICIT NONE
-      DOUBLE PRECISION M0,MP,ASQCD,ASM,D1
+      DOUBLE PRECISION M0, ASQCD,ASM,D1
       EXTERNAL ASQCD
       INCLUDE 'qcdparam.inc'
       ASM       = ASQCD(M0)

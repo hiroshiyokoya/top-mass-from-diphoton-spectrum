@@ -1,3 +1,16 @@
+C     gg2aaBFD.f: light-quark gg -> gamma gamma amplitudes at one and
+C     two loops in the form of Bern, De Freitas and Dixon (2001), with
+C     the leading- and subleading-colour two-loop functions F^L and F^SL
+C     (inference from the file name and the code structure).
+C     Not called by mktemplate or by any built legacy driver; the only
+C     caller is legacy/test_twoloop.f, which the Makefile does not
+C     build.  It is not used for arXiv:1607.00990.
+C
+C     GG2AABFD1 (RS, COS, L1234): one-loop massless-quark amplitude.
+C       RS = M_aa [GeV], COS = cos(theta*), L1234 = helicities (+-1).
+C       Here t = -s(1+COS)/2 and u = -s(1-COS)/2 (t and u swapped with
+C       respect to GG2AAQ) and the -++-/-+-+ assignments are swapped
+C       too, so it gives the same values as GG2AAQ (read).
       DOUBLE COMPLEX FUNCTION GG2AABFD1 (RS,COS,L1234)
       IMPLICIT NONE
       DOUBLE PRECISION RS,COS
@@ -36,6 +49,12 @@ c     IF ( COS.EQ.-1D0 ) COS = -1D0+EPS
       RETURN
       END
 C
+C
+C     GG2AABFD2 (RS, COS, MUR, L1234): two-loop finite remainder
+C       (11 N_c - 2 n_f)/6 (log(MUR**2/s) + i pi) M1
+C         + N_c F^L - F^SL/N_c
+C     with N_c = 3, n_f = 5, M1 = GG2AABFD1 and MUR [GeV] the
+C     renormalisation scale.
       DOUBLE COMPLEX FUNCTION GG2AABFD2 (RS,COS,MUR,L1234)
       IMPLICIT NONE
       DOUBLE PRECISION RS,COS,MUR
@@ -63,13 +82,19 @@ c     IF ( COS.EQ.-1D0 ) COS = -1D0+EPS
       RETURN
       END
 C
+C
+C     BFDFL (S, T, U, L1234): leading-colour function F^L in terms of
+C     x = t/s, y = u/s, X = log(-x), Y = log(-y).  Classes: ++++ 1/2;
+C     -+++ type MPPP or PPMP (chosen by L1234(3) = L1234(4)),
+C     symmetrised in x <-> y; --++ MMPP symmetrised; -+-+ MPMP(x,y);
+C     -++- MPMP(y,x).
       DOUBLE COMPLEX FUNCTION BFDFL (S,T,U,L1234)
       IMPLICIT NONE
       DOUBLE PRECISION S,T,U
       INTEGER L1234(4)
-      DOUBLE PRECISION PI,ZETA3,ZETA4,ONE,HALF,TWO,EPS
+      DOUBLE PRECISION PI,ZETA3,ZETA4,ONE,HALF,TWO
       DOUBLE COMPLEX UNIT,IMAG
-      PARAMETER ( EPS = 1D-5 , PI = 3.141592654D0 )
+      PARAMETER (PI = 3.141592654D0 )
       PARAMETER ( ZETA3 = 1.2020569D0 , ZETA4 = PI**2/90D0 )
       PARAMETER ( ONE = 1D0, HALF = 0.5D0, TWO = 2D0 )
       PARAMETER ( UNIT = DCMPLX(1D0,0D0), IMAG = DCMPLX(0D0,1D0) )
@@ -150,13 +175,16 @@ C
       RETURN
       END
 C
+C
+C     BFDFSL (S, T, U, L1234): subleading-colour function F^SL, same
+C     variables and classes as BFDFL; ++++ gives -3/2.
       DOUBLE COMPLEX FUNCTION BFDFSL (S,T,U,L1234)
       IMPLICIT NONE
       DOUBLE PRECISION S,T,U
       INTEGER L1234(4)
-      DOUBLE PRECISION PI,ZETA3,ZETA4,ONE,HALF,TWO,EPS
+      DOUBLE PRECISION PI,ZETA3,ZETA4,ONE,HALF,TWO
       DOUBLE COMPLEX UNIT,IMAG
-      PARAMETER ( EPS = 1D-5 , PI = 3.141592654D0 )
+      PARAMETER (PI = 3.141592654D0 )
       PARAMETER ( ZETA3 = 1.2020569D0 , ZETA4 = PI**2/90D0 )
       PARAMETER ( ONE = 1D0, HALF = 0.5D0, TWO = 2D0 )
       PARAMETER ( UNIT = DCMPLX(1D0,0D0), IMAG = DCMPLX(0D0,1D0) )
@@ -219,6 +247,11 @@ C
       RETURN
       END
 C
+C
+C     POLYLOG (N1, X): meant to return Li_N1(X) from CHAPLIN.  As
+C     written, all three branches test N1.EQ.2 and pass two to four
+C     indices to HPL1, so only N1 = 2 is reached and N1 = 3, 4 stop
+C     with 'ERROR'.
       DOUBLE COMPLEX FUNCTION POLYLOG(N1,X)
       IMPLICIT NONE
       DOUBLE PRECISION X

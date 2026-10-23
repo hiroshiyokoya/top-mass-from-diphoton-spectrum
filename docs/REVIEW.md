@@ -107,6 +107,40 @@
 
 P21・P22 は、2016 年のコードを保管する方針（イシュー #12）に従い、コードは変更しない。
 
+## 追加の指摘（2026-10、コメント追加と gfortran の警告の整理で見つけたもの、#26）
+
+`fortran/src/` と `fortran/lib/` の自作のファイルに英語のコメントを足す作業（#26）で、コードを読んで見つけた点。どれも `mktemplate` の結果には影響しない（read）。
+
+- **P23.** `fortran/lib/amp/gg2aaBFD.f`（2 ループの軽いクォーク振幅、Bern–De Freitas–Dixon）は `mktemplate` から呼ばれていない（`fortran/legacy/test_twoloop.f` だけが使う。read）。使う前に次の点を確かめる必要がある。
+  - `POLYLOG` の 3 つの分岐がどれも `N1.EQ.2` を調べるので、Li₃・Li₄ に当たる `N1 = 3, 4` は `STOP` する。`HPL1` に渡す引数の数も分岐ごとに違い、gfortran が引数の数と型の食い違いを警告する（verified、警告として）。
+  - `MPPP`, `PPMP` の最後の項が `(X+IMAG*PI)` で、比 `X` に $i\pi$ を足している。他の項と同じく対数 `XX` の書き間違いの可能性がある（inference）。
+  - `GG2AABFD1` は 1 ループの軽いクォーク振幅で、中身は `GG2AAQ` と同じ。
+- **P24.** `fortran/lib/amp/gg2aaG.f` の `J=4`（A を切って B·G だけを返す）は、直前に同じ $m_{\gamma\gamma}$ で `J=2` か `3` を呼んだときだけ正しい。キャッシュに当たらないと G を計算しても保存せず、`GRN1` も設定しない（read）。`mktemplate` は `J=4` を使わない。
+- **P25.** `fortran/lib/qcd/QCDlibs.f` の $\alpha_s$（`ASQCD`）について（read）。
+  - `Q.EQ.Q0` の近道は効かない（`Q0` は更新されず、`RETURN` もない）。害はない。
+  - $Q > $ `PMT` でも $n_f = 5$ で走らせる（$n_f = 6$ の行はコメントアウト）。`AST6` は計算するが使わない。
+  - しきい値の質量 `PMT` は 173.2 GeV 固定で、テンプレートの $m_t$ に合わせて動かない。
+  - `NQCD=0`（LO の走り）でも、フレーバーのしきい値での $\mathcal{O}(\alpha_s^2)$ の接続係数を掛ける。
+- **P26.** `QCDLIBS` の初期化（read）。
+  - PEGASUS の設定は最初の `ASQCD` の呼び出しで 1 回だけ行う。`QCDLIBS` 自身が質量の換算で `ASQCD` を呼ぶので、`NQCD` は `QCDLIBS` より前に決めておく必要がある。
+  - 質量の換算は `PMB`, `PMC` を設定している途中で `ASQCD` を呼ぶので、それぞれの換算はその時点までに決まったしきい値で計算される（呼ぶ順番に依存する）。
+  - `COMMON /QCDLIB/` の `B0`, `QTHR` は設定されない（使われていない）。
+  - s クォークの極質量 `PMS` は、$\overline{\rm MS}$ 質量 0.115 GeV から摂動的に換算している。この低いスケールでは換算の意味が薄い（使われていない）。
+- **P27.** `fortran/lib/green/GrnMSBNLO.f`（read）。
+  - 収束の数え始め `IB` が 0 から始まるので、判定が 1 歩遅れる（害はない）。
+  - 小さい $r$ の初期条件のスケール `MU` とポテンシャルのスケール `MUB` は別の引数だが、`GG2AAG` は同じ値を渡す。分けて使うと、`COMMON /MSB1/` の `MU`（中身は `MUB`）と引数の `MU` の名前が紛らわしい。
+
+## gfortran の警告（リンター、2026-10、#26）
+
+`gfortran -std=legacy -Wall -Wextra -fsyntax-only` を、`fortran/src/mktemplate.f` と `fortran/lib/{amp,green,qcd}/` の自作のファイルに掛けた（`fortran/legacy/` と取り込んだ CHAPLIN・PEGASUS は対象外）。
+
+- 警告は 84 件から 49 件に減った。
+- **直したもの**：宣言していて使っていない変数・PARAMETER（27 件）。修正前後で、`mktemplate` の 4 つの設定（matched NLO・matched LO・1 ループ・FCC のカット）のテンプレートがビット一致した（`scripts/check_regression.sh`、verified）。
+- **残したもの**：
+  - コメントアウトされた切り替え用の行で使う名前。例：`GrnMSBNLO.f` の `VH`, `MH`, `GF`, `C`, `SQ2`（ヒッグス交換のポテンシャル）、`gg2aaBFD.f`・`gg2aaQ.f` の `eps`。
+  - CHAPLIN の include ファイル（`hplN`, `nN`）由来の警告、タブ文字、実数の等号比較。
+  - `gg2aaBFD.f` の `HPL1` の引数の食い違い（P23）。使われていないコードなので、直さずに記録だけする。
+
 ## 範囲外（文書化のみ）
 
 - 背景イベント（`Direct.dat`, `OneF.dat`, `TwoF.dat`）は Fortran では作れず、リポにも無い。形式は「$m_{\gamma\gamma}$ の値を空白区切りで並べたテキスト」（`fit/TMDP.py` の `read_events_from_file`）。出所（DIPHOX など）は未確認。
